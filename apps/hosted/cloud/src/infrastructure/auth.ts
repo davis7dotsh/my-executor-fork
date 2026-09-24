@@ -1,5 +1,7 @@
 import { BrowserSession } from "@executor-js/hosted-server/browser/contracts";
 import { HostedAppSessions, hostedAppSessions } from "@executor-js/hosted-server/app-ui";
+import { UiFailed } from "apps/ui/contracts";
+import { makeExecutionMemo } from "alchemy/Runtime/ExecutionMemo";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { APIError } from "better-auth/api";
 import { OrganizationId } from "@executor-js/hosted-server";
@@ -225,19 +227,38 @@ export const cloudAuth = (send: SendAuthEmail) =>
         });
       }),
     );
-    const appSessions = Layer.effect(
-      HostedAppSessions,
+    // Expose a stateless shell to every route. Native context initialization
+    // happens only when an app-session operation is used, once in this event.
+    const initializedSessions = yield* makeExecutionMemo(
       auth.auth.pipe(
         Effect.provide(RuntimeContext.phantom),
         Effect.flatMap((native) =>
           Effect.tryPromise({
             try: () => native.$context,
-            catch: () => new AuthenticationUnavailable(),
+            catch: () => new UiFailed({ reason: "unavailable" }),
           }),
         ),
         Effect.map((context) => hostedAppSessions(context, globalThis.crypto)),
         Effect.withSpan("auth.app_sessions.initialize"),
       ),
+    );
+    const resolveSessions = initializedSessions.pipe(Effect.provide(RuntimeContext.phantom));
+    const appSessions = Layer.succeed(
+      HostedAppSessions,
+      HostedAppSessions.of({
+        organization: (...args) =>
+          resolveSessions.pipe(Effect.flatMap((sessions) => sessions.organization(...args))),
+        access: (...args) =>
+          resolveSessions.pipe(Effect.flatMap((sessions) => sessions.access(...args))),
+        begin: (...args) =>
+          resolveSessions.pipe(Effect.flatMap((sessions) => sessions.begin(...args))),
+        authorize: (...args) =>
+          resolveSessions.pipe(Effect.flatMap((sessions) => sessions.authorize(...args))),
+        complete: (...args) =>
+          resolveSessions.pipe(Effect.flatMap((sessions) => sessions.complete(...args))),
+        current: (...args) =>
+          resolveSessions.pipe(Effect.flatMap((sessions) => sessions.current(...args))),
+      }),
     );
     const requestHandler = Effect.flatMap(
       Effect.context<RuntimeContext | HttpServerRequest.HttpServerRequest | Scope.Scope>(),

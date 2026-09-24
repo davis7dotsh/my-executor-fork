@@ -148,8 +148,13 @@ export const withOrganizationRequest = <E, R>(
     const principal = yield* auth.current(headers);
     if (principal === null) return yield* new Unauthorized();
     const organization = yield* auth.organization(reference);
-    yield* refuseRemoved(organization);
-    const membership = yield* auth.membership(principal, organization);
+    // Independent request-owned stores can overlap these reads. Keep removal
+    // authoritative even when membership fails first, as in the ordered path.
+    const [membershipResult] = yield* Effect.all(
+      [auth.membership(principal, organization).pipe(Effect.exit), refuseRemoved(organization)],
+      { concurrency: 2 },
+    );
+    const membership = yield* membershipResult;
     const access = {
       organization,
       owner: organizationOwner(organization),

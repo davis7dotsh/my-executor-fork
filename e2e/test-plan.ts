@@ -690,6 +690,19 @@ export const scenarios = {
       local: na("This scenario requires Cloudflare's compiler Worker memory limit."),
     },
   },
+  authQueryPaths: {
+    fixtures: "actors",
+    file: "auth-query-paths.spec.ts",
+    appOrigin: true,
+    title: "Cloud auth uses native queries and limits app session initialization to UI routes",
+    targets: {
+      cloud: scheduled,
+      "self-host": na(
+        "This scenario checks the Cloud PostgreSQL transport and invocation-owned auth.",
+      ),
+      local: na("Local does not use hosted authentication."),
+    },
+  },
   requestTiming: {
     fixtures: "actors",
     file: "request-timing.spec.ts",

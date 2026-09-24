@@ -1,9 +1,10 @@
 /** The hosted auth database is Postgres; other SQL drivers do not belong in this Worker. */
 import { Database } from "@alchemy.run/better-auth/Database";
-import { openPostgresPool } from "alchemy/SQL/PostgresDriver";
+import { PgClient } from "@effect/sql-pg";
 import { Effect, Layer, Option, Schema } from "effect";
-import { Kysely, PostgresDialect, type QueryId } from "kysely";
+import { type QueryId } from "kysely";
 import { cloudDatabaseConnection } from "./database.ts";
+import { makeNativeAuthDatabase } from "../implementation/auth-driver.ts";
 
 const DriverCode = Schema.Struct({
   code: Schema.String.check(Schema.isPattern(/^(?:[0-9A-Z]{5}|E[A-Z_]{2,40})$/)),
@@ -21,14 +22,16 @@ export const cloudAuthDatabase = Layer.unwrap(
       Database.of({
         provider: "postgres",
         runtime: Effect.gen(function* () {
-          // Keep Alchemy's request-owned pg pool and Better Auth's Postgres dialect.
+          // Match the product's native transport without sharing its max-one
+          // pool across Better Auth transactions and product callbacks.
           const url = yield* connection.connectionString;
-          const pool = yield* openPostgresPool(Effect.succeed(url));
+          const services = yield* Layer.build(
+            PgClient.layer({ url, maxConnections: 1, prepare: false }),
+          ).pipe(Effect.orDie);
           // This trusted host callback needs the complete invocation context.
           const context = yield* Effect.context<never>();
           const started = new WeakMap<QueryId, number>();
-          const db = new Kysely<unknown>({
-            dialect: new PostgresDialect({ pool }),
+          const db = yield* makeNativeAuthDatabase({
             plugins: [
               {
                 transformQuery: ({ queryId, node }) => {
@@ -60,6 +63,7 @@ export const cloudAuthDatabase = Layer.unwrap(
                       "db.query.success": event.level === "query",
                       "db.query.parameter_count": event.query.parameters.length,
                       "db.query.clock": "cloudflare-io",
+                      "db.query.driver": "effect-pg",
                       ...(start === undefined
                         ? {}
                         : { "db.query.compile_to_result_ms": Date.now() - start }),
@@ -70,7 +74,7 @@ export const cloudAuthDatabase = Layer.unwrap(
                 ),
               );
             },
-          });
+          }).pipe(Effect.provideContext(services));
           // SSO account resolution and membership provisioning require real
           // transactions; the Kysely adapter otherwise runs callbacks without one.
           return { db, type: "postgres" as const, transaction: true };
