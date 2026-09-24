@@ -25,6 +25,7 @@ import {
   HostCallError,
   DeclaredRequirements,
   HostedTool,
+  HostedWorkflow,
   HostResponse,
   ToolResultObservation,
   type HostContext,
@@ -37,6 +38,10 @@ import { facetIdentity, FacetResult } from "@executor-js/app-data/cloudflare";
 import type { AppDataSupervisor } from "./app-data.ts";
 import { dataChanges } from "../implementation/data-changes.ts";
 import { cachedRuntimeBuilds } from "../implementation/runtime-build-cache.ts";
+import {
+  cachedRuntimeCatalog,
+  runtimeCatalogIdentity,
+} from "../implementation/runtime-catalog-cache.ts";
 import type { DurableObjectNamespace, Fetcher } from "@cloudflare/workers-types";
 import { workerModules } from "@executor-js/app-data/worker-bundle";
 import type { CloudBundle } from "../contracts/builds.ts";
@@ -450,28 +455,40 @@ export const cloudRuntime = Effect.fn(function* (
             app,
           );
         }).pipe(Effect.withSpan("runtime.cloud.skills")),
-      inspect: ({ app, build, ...context }) =>
+      inspect: ({ app, build, catalogRevision, ...context }) =>
         Effect.gen(function* () {
           const identity = `${app}:${yield* facetIdentity(build, JSON.stringify(Redacted.value(context.accounts))).pipe(Effect.mapError(protocolFailed))}`;
           yield* Effect.annotateCurrentSpan({
             "executor.runtime.mode": "worker",
             "executor.worker.identity": identity,
           });
-          return yield* dispatch(
-            load(build),
-            { operation: "inspect" },
-            context,
-            Schema.Array(HostedTool),
-            HostInspectError,
-            build,
-            identity,
+          const catalogIdentity = yield* runtimeCatalogIdentity(
             app,
+            build,
+            context.accounts,
+            catalogRevision,
+          ).pipe(Effect.mapError(protocolFailed));
+          return yield* cachedRuntimeCatalog(
+            origin,
+            "tools",
+            catalogIdentity,
+            Schema.Array(HostedTool),
+            dispatch(
+              load(build),
+              { operation: "inspect" },
+              context,
+              Schema.Array(HostedTool),
+              HostInspectError,
+              build,
+              identity,
+              app,
+            ),
           );
         }).pipe(Effect.withSpan("runtime.cloud.inspect")),
-      workflow: ({ app, build, command, ...context }) =>
+      workflow: ({ app, build, command, catalogRevision, ...context }) =>
         Effect.gen(function* () {
           const identity = `${app}:workflow:${context.workflow?.runId ?? "inspect"}:${yield* facetIdentity(build, JSON.stringify(Redacted.value(context.accounts))).pipe(Effect.mapError(protocolFailed))}`;
-          return yield* dispatch(
+          const execute = dispatch(
             load(build),
             command,
             context,
@@ -480,6 +497,23 @@ export const cloudRuntime = Effect.fn(function* (
             build,
             identity,
             app,
+          );
+          if (command.operation !== "workflows") return yield* execute;
+          const catalogIdentity = yield* runtimeCatalogIdentity(
+            app,
+            build,
+            context.accounts,
+            catalogRevision,
+          ).pipe(Effect.mapError(protocolFailed));
+          return yield* cachedRuntimeCatalog(
+            origin,
+            "workflows",
+            catalogIdentity,
+            Schema.Array(HostedWorkflow),
+            execute.pipe(
+              Effect.flatMap(Schema.decodeUnknownEffect(Schema.Array(HostedWorkflow))),
+              Effect.catchTag("SchemaError", (cause) => Effect.fail(protocolFailed(cause))),
+            ),
           );
         }).pipe(
           Effect.withSpan("runtime.cloud.workflow", {

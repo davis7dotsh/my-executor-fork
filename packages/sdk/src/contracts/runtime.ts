@@ -76,7 +76,12 @@ export interface Runtime<Requirements = never> {
     Requirements
   >;
   readonly inspect: (
-    input: { readonly app: string; readonly build: BuildId } & HostContext,
+    input: {
+      readonly app: string;
+      readonly build: BuildId;
+      /** Current caller selection revision; runtimes may cache metadata, never authorization. */
+      readonly catalogRevision?: string;
+    } & HostContext,
   ) => Effect.Effect<
     readonly HostedTool[],
     RuntimeLoadError | typeof HostInspectError.Type,
@@ -117,6 +122,7 @@ export interface Runtime<Requirements = never> {
       readonly app: string;
       readonly build: BuildId;
       readonly command: WorkflowCommand;
+      readonly catalogRevision?: string;
     } & HostContext,
   ) => Effect.Effect<Json, RuntimeLoadError | typeof HostCallError.Type, Requirements>;
   readonly call: (

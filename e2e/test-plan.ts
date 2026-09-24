@@ -1765,6 +1765,18 @@ export const scenarios = {
       ),
     },
   },
+  runtimeCatalogCache: {
+    fixtures: "actors",
+    file: "runtime-catalog-cache.spec.ts",
+    title: "Cloud catalogs reuse metadata and reject access after app removal",
+    targets: {
+      cloud: managedCloud,
+      "self-host": na(
+        "Cloud Cache API metadata behavior; shared authorization has hosted coverage.",
+      ),
+      local: na("Cloud Cache API metadata behavior."),
+    },
+  },
   appSkills: {
     fixtures: "actors",
     file: "app-skills.spec.ts",

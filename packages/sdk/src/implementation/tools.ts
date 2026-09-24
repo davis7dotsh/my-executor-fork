@@ -1,7 +1,7 @@
 import { ProviderError, SkillLoadFailed } from "apps/contracts";
 import { appProviderFailure } from "./provider-error.ts";
 /** Snapshot the configured app, then execute with its selected credentials. */
-import { type Crypto, Effect, Match, Redacted, Result, Schema } from "effect";
+import { type Crypto, Effect, Encoding, Match, Redacted, Result, Schema } from "effect";
 import type { AppDatabases } from "@executor-js/app-data";
 import { bindAppStorage } from "./app-database.ts";
 import {
@@ -178,6 +178,30 @@ export function resolve(
 
 type Snapshot = Effect.Success<ReturnType<typeof snapshot>>;
 
+/** Re-encryption on reconnect changes the revision even when the replacement token is identical. */
+export const catalogRevision = (state: Snapshot, crypto: Crypto.Crypto) =>
+  crypto
+    .digest(
+      "SHA-256",
+      new TextEncoder().encode(
+        JSON.stringify({
+          profile: state.profile?.id,
+          revision: state.profile?.revision,
+          credentials: state.selections.map(({ slot, accounts }) => ({
+            slot,
+            accounts: accounts.map((account) => ({
+              id: account.id,
+              envelope: Array.from(Redacted.value(account.encryptedCredentials)),
+            })),
+          })),
+        }),
+      ),
+    )
+    .pipe(
+      Effect.map(Encoding.encodeHex),
+      Effect.mapError(() => new StorageError()),
+    );
+
 function invocation(state: Snapshot, tool: ToolName, input: Json) {
   return Schema.decodeUnknownEffect(ToolInvocation)({
     app: state.app.id,
@@ -299,6 +323,7 @@ export const makeTools = (
           .inspect({
             app: state.app.id,
             build: state.deployment.build,
+            catalogRevision: yield* catalogRevision(state, crypto),
             ...context,
             ...(workflows === undefined
               ? {}
