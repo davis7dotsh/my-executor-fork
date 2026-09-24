@@ -34,6 +34,7 @@ const resolveReference = (
   reference: typeof OrganizationReference.Type,
 ) =>
   resolveOrganizationReference(context.adapter, reference).pipe(
+    Effect.map((organization) => organization.id),
     Effect.catchTags({
       OrganizationForbidden: () => Effect.fail(new APIError("FORBIDDEN")),
       AuthenticationUnavailable: () => Effect.fail(new APIError("SERVICE_UNAVAILABLE")),

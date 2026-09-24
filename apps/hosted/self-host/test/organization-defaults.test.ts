@@ -127,8 +127,8 @@ test("inventory and MCP reads succeed without invoking a failing default provisi
           Layer.provide(
             Layer.succeed(Authentication, {
               origin,
-              organization: (reference) => Effect.succeed(ReferenceOrganizationId.make(reference)),
-              organizationSlug: () => Effect.succeed("fixture"),
+              organization: (reference) =>
+                Effect.succeed({ id: ReferenceOrganizationId.make(reference), slug: "fixture" }),
               current: () => Effect.succeed(principal),
               membership: () => Effect.succeed({ role: "owner", headers: new Headers() }),
               removeOrganization: () => Effect.die("Organization removal is outside this fixture"),

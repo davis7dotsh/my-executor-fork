@@ -17,7 +17,6 @@ import { readOrganizationIconUpload } from "./organization-icons.ts";
 import { OrganizationTombstones } from "../contracts/organization-removal.ts";
 import { requireOrganizationAdmin } from "./access.ts";
 import { CurrentPrincipal, CurrentUserId } from "../contracts/auth.ts";
-import { APIError } from "better-auth/api";
 import { ErrorReporter, Effect, Layer, Schema } from "effect";
 import { HttpApiBuilder } from "effect/unstable/httpapi";
 import type { OwnerId } from "@executor-js/sdk/core";
@@ -67,20 +66,6 @@ export const lookupMembership = (
         Effect.mapError(() => new OrganizationForbidden()),
       ),
     ),
-  );
-
-/** Resolve a checked organization ID for canonical return links without session selection. */
-export const lookupOrganizationSlug = (call: () => Promise<unknown>) =>
-  Effect.tryPromise({
-    try: call,
-    catch: (cause) =>
-      cause instanceof APIError && (cause.statusCode === 401 || cause.statusCode === 403)
-        ? new OrganizationForbidden()
-        : new AuthenticationUnavailable(),
-  }).pipe(
-    Effect.flatMap(Schema.decodeUnknownEffect(Schema.Struct({ slug: Schema.NonEmptyString }))),
-    Effect.map((organization) => organization.slug),
-    Effect.catchTag("SchemaError", () => Effect.fail(new AuthenticationUnavailable())),
   );
 
 /**
@@ -147,7 +132,8 @@ export const withOrganizationRequest = <E, R>(
       return yield* new Forbidden();
     const principal = yield* auth.current(headers);
     if (principal === null) return yield* new Unauthorized();
-    const organization = yield* auth.organization(reference);
+    const resolved = yield* auth.organization(reference);
+    const organization = resolved.id;
     yield* refuseRemoved(organization);
     const membership = yield* auth.membership(principal, organization);
     const access = {
@@ -155,13 +141,11 @@ export const withOrganizationRequest = <E, R>(
       owner: organizationOwner(organization),
       role: membership.role,
     };
-    return (yield* response(auth.organizationSlug(headers, organization)).pipe(
+    const namespace = Effect.succeed(resolved.slug);
+    return (yield* response(namespace).pipe(
       Effect.tapCause(ErrorReporter.report),
       Effect.provideService(CurrentOrganization, access),
-      Effect.provideService(
-        CurrentOrganizationNamespace,
-        auth.organizationSlug(headers, organization),
-      ),
+      Effect.provideService(CurrentOrganizationNamespace, namespace),
       Effect.provideService(CurrentUserId, principal.userId),
       Effect.provideService(CurrentUsage, { source: "dashboard" }),
       Effect.provideService(CurrentPrincipal, principal),

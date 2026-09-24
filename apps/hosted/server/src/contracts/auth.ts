@@ -1,7 +1,11 @@
 import { UserFacingError } from "@executor-js/utils/user-facing-error";
 import type { ApiKeyId } from "./api-keys.ts";
 import type { AuthorizationPolicy } from "@executor-js/authorization";
-import type { OrganizationAccess, OrganizationReference } from "./organization.ts";
+import type {
+  OrganizationAccess,
+  OrganizationReference,
+  ResolvedOrganization,
+} from "./organization.ts";
 import { Context, Effect, Schema } from "effect";
 import { HttpApiMiddleware } from "effect/unstable/httpapi";
 import type { OrganizationId, OrganizationRole, OrganizationForbidden } from "./organization.ts";
@@ -96,11 +100,7 @@ export class Authentication extends Context.Service<
     /** Resolve an explicit URL/API reference to its canonical storage identity. */
     readonly organization: (
       reference: OrganizationReference,
-    ) => Effect.Effect<OrganizationId, AuthenticationUnavailable | OrganizationForbidden>;
-    readonly organizationSlug: (
-      headers: Headers,
-      organization: OrganizationId,
-    ) => Effect.Effect<string, AuthenticationUnavailable | OrganizationForbidden>;
+    ) => Effect.Effect<ResolvedOrganization, AuthenticationUnavailable | OrganizationForbidden>;
     /** Read live membership for a principal already verified in this request. */
     readonly membership: (
       principal: Principal,

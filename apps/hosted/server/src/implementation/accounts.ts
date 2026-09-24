@@ -18,8 +18,8 @@ import { Effect } from "effect";
 import { HttpServerRequest, HttpServerResponse } from "effect/unstable/http";
 import { HttpApiBuilder } from "effect/unstable/httpapi";
 import { HostedApi } from "../contracts/api.ts";
-import { ApiAuthentication, Authentication } from "../contracts/auth.ts";
-import { CurrentOrganization } from "../contracts/organization.ts";
+import { Authentication } from "../contracts/auth.ts";
+import { CurrentOrganizationNamespace } from "../contracts/organization.ts";
 import { HostedExecutor } from "../contracts/executor.ts";
 import {
   executionManagerOwner,
@@ -191,7 +191,6 @@ export const completeOAuth = (
 export const hostedAccountHandlers = HttpApiBuilder.group(HostedApi, "accounts", (handlers) =>
   Effect.gen(function* () {
     const auth = yield* Authentication;
-    const api = yield* ApiAuthentication;
     const redirectUri = accountOAuthRedirectUri(auth);
     return handlers
       .handle("get", ({ params }) =>
@@ -227,12 +226,7 @@ export const hostedAccountHandlers = HttpApiBuilder.group(HostedApi, "accounts",
       .handle("connect", ({ params, payload }) =>
         Effect.gen(function* () {
           const owner = yield* currentOwner;
-          const request = yield* HttpServerRequest.HttpServerRequest;
-          const headers = new Headers(request.headers);
-          const organization = yield* CurrentOrganization;
-          const slug = headers.has("authorization")
-            ? (yield* api.authenticate(headers, organization.organization)).organizationSlug
-            : yield* auth.organizationSlug(headers, organization.organization);
+          const slug = yield* Effect.flatten(CurrentOrganizationNamespace);
           const connection = yield* connectAccount(owner, { app: params.app, ...payload });
           return {
             ...connection,

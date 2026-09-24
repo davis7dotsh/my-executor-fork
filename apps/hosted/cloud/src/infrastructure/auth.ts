@@ -20,7 +20,6 @@ import {
   sessionPrincipal,
   lookupMembership,
   deleteOrganizationRecords,
-  lookupOrganizationSlug,
   resolveOrganizationReference,
   mcpAuthenticationError,
   ApiAuthentication,
@@ -137,17 +136,6 @@ export const cloudAuth = (send: SendAuthEmail) =>
               Effect.flatMap((native) => Effect.promise(() => native.$context)),
               Effect.flatMap((context) => resolveOrganizationReference(context.adapter, reference)),
             ),
-          organizationSlug: (headers, organizationId) =>
-            auth.auth
-              .pipe(
-                Effect.provide(RuntimeContext.phantom),
-                Effect.flatMap((native) =>
-                  lookupOrganizationSlug(() =>
-                    native.api.getOrganization({ headers, query: { organizationId } }),
-                  ),
-                ),
-              )
-              .pipe(Effect.withSpan("auth.organizationSlug")),
           membership: (principal, organizationId) =>
             auth.auth
               .pipe(

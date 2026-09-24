@@ -13,7 +13,6 @@ import {
   AuthenticationUnavailable,
   sessionPrincipal,
   lookupMembership,
-  lookupOrganizationSlug,
   resolveOrganizationReference,
   deleteOrganizationRecords,
 } from "@executor-js/hosted-server";
@@ -56,10 +55,6 @@ export const selfHostAuth = Effect.gen(function* () {
         .pipe(Effect.flatMap(sessionPrincipal))
         .pipe(Effect.withSpan("auth.current")),
     organization: (reference) => resolveOrganizationReference(context.adapter, reference),
-    organizationSlug: (headers, organizationId) =>
-      lookupOrganizationSlug(() =>
-        auth.api.getOrganization({ headers, query: { organizationId } }),
-      ).pipe(Effect.withSpan("auth.organizationSlug")),
     membership: (principal, organizationId) =>
       lookupMembership(context.adapter, principal, organizationId).pipe(
         Effect.withSpan("auth.membership"),

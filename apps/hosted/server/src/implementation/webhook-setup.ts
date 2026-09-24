@@ -19,7 +19,7 @@ const authorized = (
   permission: "read" | "use" = "use",
 ) =>
   Effect.gen(function* () {
-    const organization = yield* auth.organization(input.organization);
+    const { id: organization } = yield* auth.organization(input.organization);
     const principal = yield* CurrentPrincipal;
     const membership = yield* auth.membership(principal, organization);
     const access = { organization, role: membership.role, owner: organizationOwner(organization) };
