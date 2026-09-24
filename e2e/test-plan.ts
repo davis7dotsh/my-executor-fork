@@ -1288,6 +1288,28 @@ export const scenarios = {
       local: na("This scenario uses hosted APIs; the runtime and collector are shared with Local."),
     },
   },
+  organizationIdentityRefresh: {
+    fixtures: "actors",
+    file: "app-polling.spec.ts",
+    title: "Session hints and live refreshes do not duplicate organization list reads",
+    targets: {
+      "self-host": scheduled,
+      cloud: na(
+        "This journey isolates the browser hint path; Cloud may seed a server-verified entry.",
+      ),
+      local: na("Local does not have organizations or hosted browser sessions."),
+    },
+  },
+  appDomainPollLimit: {
+    fixtures: "actors",
+    file: "app-polling.spec.ts",
+    title: "Pending app domains stop automatic polling and recover through Check again",
+    targets: {
+      "self-host": scheduled,
+      cloud: scheduled,
+      local: na("This journey uses hosted app readiness queries."),
+    },
+  },
   appDomainStatus: {
     fixtures: "actors",
     file: "app-domain-status.spec.ts",
