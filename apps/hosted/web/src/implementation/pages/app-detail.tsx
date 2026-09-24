@@ -83,6 +83,7 @@ export function AppDetailPage({
     enableBeforeUnload: skillDirty,
   });
   const atoms = useDashboardAtoms();
+  const selectedView = view ?? (tool === undefined ? "overview" : "tools");
   const inventory = useQuery(atoms.inventory);
   const query = useQuery(liveAppAtom({ organization, app: AppId.make(appId) }));
   const app = Option.isSome(query.data)
@@ -90,7 +91,6 @@ export function AppDetailPage({
     : Option.isSome(inventory.data)
       ? inventory.data.value.apps.find((item) => item.id === appId)
       : undefined;
-  const selectedView = view ?? (tool === undefined ? "overview" : "tools");
   const setups = useQuery(profilesAtom({ organization, app: AppId.make(appId) }));
   const authority = useQuery(appAccessAtom({ organization, app: AppId.make(appId) }));
   const access = Option.getOrUndefined(authority.data);
@@ -114,9 +114,7 @@ export function AppDetailPage({
   const [setupRequest, setSetupRequest] = useState<string>();
   const inventoryData = Option.isSome(inventory.data) ? inventory.data.value : undefined;
   const choices =
-    app && inventoryData && Option.isSome(setups.data)
-      ? accountContexts(app, setups.data.value, true)
-      : [];
+    app && Option.isSome(setups.data) ? accountContexts(app, setups.data.value, true) : [];
   const selected = selectedAccountContext(choices, profile);
   const selectedId = selected?.profile?.id;
   const personal = app !== undefined && Object.keys(app.requirements.accounts).length > 0;
@@ -352,211 +350,229 @@ export function AppDetailPage({
                 );
               return (
                 <QueryResult
-                  result={inventory.result}
+                  result={setups.result}
                   Failure={HostedFailure}
-                  retry={inventory.refresh}
+                  retry={setups.refresh}
                   pending={pending}
                 >
-                  {(inventory) => (
-                    <QueryResult
-                      result={setups.result}
-                      Failure={HostedFailure}
-                      retry={setups.refresh}
-                      pending={pending}
-                    >
-                      {(entries) => {
-                        const contexts = accountContexts(current, entries);
-                        const previewContexts = contexts.filter(
-                          (context) =>
-                            accountSelectionIssues(
-                              context.app,
-                              context.accounts,
-                              inventory.accounts,
-                            ).length === 0,
-                        );
-                        const previewEmpty =
-                          contexts.length > 0 ? (
-                            <p className="py-5 text-sm text-muted-foreground">
-                              Finish account setup in Accounts to load this preview.
-                            </p>
-                          ) : (
-                            empty
-                          );
-                        const context = selectedAccountContext(
-                          accountContexts(current, entries, true),
-                          profile,
-                        );
-                        if (selectedView === "skills")
-                          return context === undefined ? (
-                            empty
-                          ) : (
-                            <AppSkills
-                              key={context.key}
-                              canEdit={canManage}
+                  {(entries) => {
+                    const contexts = accountContexts(current, entries);
+                    const previewContexts = contexts.filter((context) =>
+                      inventoryData === undefined
+                        ? context.profile?.failure !== "accounts" &&
+                          Object.keys(context.app.requirements.accounts).every(
+                            (slot) => context.accounts[slot] !== undefined,
+                          )
+                        : accountSelectionIssues(
+                            context.app,
+                            context.accounts,
+                            inventoryData.accounts,
+                          ).length === 0,
+                    );
+                    const previewEmpty =
+                      contexts.length > 0 ? (
+                        <p className="py-5 text-sm text-muted-foreground">
+                          Finish account setup in Accounts to load this preview.
+                        </p>
+                      ) : (
+                        empty
+                      );
+                    const context = selectedAccountContext(
+                      accountContexts(current, entries, true),
+                      profile,
+                    );
+                    if (selectedView === "skills")
+                      return context === undefined ? (
+                        empty
+                      ) : (
+                        <AppSkills
+                          key={context.key}
+                          canEdit={canManage}
+                          app={current}
+                          bindings={appBrowserBindings(organization, current, context.profile)}
+                          Failure={HostedFailure}
+                          editing={
+                            canManage
+                              ? {
+                                  atoms: appManagement(organization),
+                                  onDirty: setSkillDirty,
+                                  onApp: (get, saved) => acknowledgeApp(get, organization, saved),
+                                }
+                              : undefined
+                          }
+                        />
+                      );
+                    if (selectedView === "tools")
+                      return context === undefined ? (
+                        empty
+                      ) : (
+                        <AppTools
+                          key={context.key}
+                          app={context.app}
+                          profile={context.profile}
+                          accounts={inventoryData?.accounts}
+                          selected={tool}
+                        />
+                      );
+                    if (selectedView === "workflows" || selectedView === "webhooks")
+                      return context === undefined ? (
+                        empty
+                      ) : (
+                        <AppResources
+                          key={context.key}
+                          context={context}
+                          view={selectedView}
+                          editable={context.profile !== undefined || canManage}
+                        />
+                      );
+                    if (selectedView === "schedules")
+                      return context === undefined ? (
+                        empty
+                      ) : (
+                        <AppSchedules
+                          app={current}
+                          canEdit={canManage}
+                          key={context.key}
+                          enabled={context.profile?.enabled !== false}
+                          bindings={scheduleBindings(
+                            {
+                              organization,
+                              app: current.id,
+                              profile: context.profile?.id,
+                            },
+                            context.profile === undefined ? canManage : context.profile.enabled,
+                          )}
+                          Failure={HostedFailure}
+                        />
+                      );
+                    if (selectedView === "overview")
+                      return (
+                        <AppOverview
+                          app={current}
+                          entries={
+                            <AppOverviewEntries
                               app={current}
-                              bindings={appBrowserBindings(organization, current, context.profile)}
-                              Failure={HostedFailure}
-                              editing={
-                                canManage
-                                  ? {
-                                      atoms: appManagement(organization),
-                                      onDirty: setSkillDirty,
-                                      onApp: (get, saved) =>
-                                        acknowledgeApp(get, organization, saved),
-                                    }
-                                  : undefined
-                              }
-                            />
-                          );
-                        if (selectedView === "tools")
-                          return context === undefined ? (
-                            empty
-                          ) : (
-                            <AppTools
-                              key={context.key}
-                              app={context.app}
-                              profile={context.profile}
-                              accounts={inventory.accounts}
-                              selected={tool}
-                            />
-                          );
-                        if (selectedView === "workflows" || selectedView === "webhooks")
-                          return context === undefined ? (
-                            empty
-                          ) : (
-                            <AppResources
-                              key={context.key}
-                              context={context}
-                              view={selectedView}
-                              editable={context.profile !== undefined || canManage}
-                            />
-                          );
-                        if (selectedView === "schedules")
-                          return context === undefined ? (
-                            empty
-                          ) : (
-                            <AppSchedules
-                              app={current}
-                              canEdit={canManage}
-                              key={context.key}
-                              enabled={context.profile?.enabled !== false}
-                              bindings={scheduleBindings(
-                                {
-                                  organization,
-                                  app: current.id,
-                                  profile: context.profile?.id,
-                                },
-                                context.profile === undefined ? canManage : context.profile.enabled,
-                              )}
-                              Failure={HostedFailure}
-                            />
-                          );
-                        if (selectedView === "overview")
-                          return (
-                            <AppOverview
-                              app={current}
-                              entries={
-                                <AppOverviewEntries
-                                  app={current}
-                                  bindings={appBrowserBindings(
-                                    organization,
-                                    current,
-                                    context?.profile,
-                                  )}
-                                  workflows={
-                                    <AppWorkflowPreview
-                                      empty={previewEmpty}
-                                      Failure={HostedFailure}
-                                      sources={previewContexts.map((context) => ({
-                                        key: context.key,
-                                        query: appBrowserBindings(
-                                          organization,
-                                          context.app,
-                                          context.profile,
-                                        ).workflows,
-                                      }))}
-                                    />
-                                  }
-                                  Failure={HostedFailure}
-                                />
-                              }
-                              accounts={
-                                <AppOverviewAccounts
-                                  app={current}
-                                  contexts={contexts}
-                                  accounts={inventory.accounts}
-                                />
-                              }
-                              tools={
-                                <AppOverviewTools
-                                  app={current}
-                                  Failure={HostedFailure}
+                              bindings={appBrowserBindings(organization, current, context?.profile)}
+                              workflows={
+                                <AppWorkflowPreview
                                   empty={previewEmpty}
+                                  Failure={HostedFailure}
                                   sources={previewContexts.map((context) => ({
                                     key: context.key,
-                                    query: toolsAtom({
+                                    query: appBrowserBindings(
                                       organization,
-                                      app: current.id,
-                                      profile: context.profile?.id,
-                                      expectedProfileRevision: context.profile?.revision,
-                                      deployment: current.activeDeployment ?? undefined,
-                                      accounts: JSON.stringify(context.accounts),
-                                    }),
+                                      context.app,
+                                      context.profile,
+                                    ).workflows,
                                   }))}
                                 />
                               }
-                              sourceDisabledReason={sourceReason}
-                              source={
-                                canManage ? (
-                                  <QueryView
-                                    query={appManagement(organization).authoring(current.id)}
-                                    Failure={HostedFailure}
-                                    pending={<OverviewCardLoading label="Loading source preview" />}
-                                  >
-                                    {(source) => <AppOverviewSource source={source} />}
-                                  </QueryView>
-                                ) : (
-                                  <p className="py-5 text-sm text-muted-foreground">
-                                    Source is restricted.
-                                  </p>
-                                )
-                              }
+                              Failure={HostedFailure}
                             />
-                          );
-                        return context === undefined && profile !== undefined ? (
-                          empty
-                        ) : (
-                          <div className="max-w-3xl space-y-4 p-5 max-[740px]:p-4">
-                            {/* Editors capture their target on open. A newly created profile must not reset an active draft. */}
-                            <AppAccounts
-                              app={current}
-                              profile={context?.profile}
-                              accounts={inventory.accounts}
-                              redirectUri={inventory.accountSetup.redirectUri}
-                              onSelected={(id) => select(id, "accounts")}
-                              onCreateProfile={
-                                personal ? () => setSetupRequest(crypto.randomUUID()) : undefined
-                              }
-                            />
-                            {context?.profile && (
-                              <ProfileStatus
-                                profile={context.profile}
-                                retry={
-                                  profileMutations({
-                                    organization,
-                                    app: current.id,
-                                    profile: context.profile.id,
-                                  }).reconcile
-                                }
-                                Failure={HostedFailure}
+                          }
+                          accounts={
+                            Object.keys(current.requirements.accounts).length === 0 ? (
+                              <AppOverviewAccounts
+                                app={current}
+                                contexts={contexts}
+                                accounts={[]}
                               />
-                            )}
-                            {setupActions}
-                          </div>
-                        );
-                      }}
-                    </QueryResult>
-                  )}
+                            ) : (
+                              <QueryResult
+                                result={inventory.result}
+                                Failure={HostedFailure}
+                                retry={inventory.refresh}
+                                pending={<OverviewCardLoading label="Loading accounts preview" />}
+                              >
+                                {(inventory) => (
+                                  <AppOverviewAccounts
+                                    app={current}
+                                    contexts={contexts}
+                                    accounts={inventory.accounts}
+                                  />
+                                )}
+                              </QueryResult>
+                            )
+                          }
+                          tools={
+                            <AppOverviewTools
+                              app={current}
+                              Failure={HostedFailure}
+                              empty={previewEmpty}
+                              sources={previewContexts.map((context) => ({
+                                key: context.key,
+                                query: toolsAtom({
+                                  organization,
+                                  app: current.id,
+                                  profile: context.profile?.id,
+                                  expectedProfileRevision: context.profile?.revision,
+                                  deployment: current.activeDeployment ?? undefined,
+                                  accounts: JSON.stringify(context.accounts),
+                                }),
+                              }))}
+                            />
+                          }
+                          sourceDisabledReason={sourceReason}
+                          source={
+                            canManage ? (
+                              <QueryView
+                                query={appManagement(organization).authoring(current.id)}
+                                Failure={HostedFailure}
+                                pending={<OverviewCardLoading label="Loading source preview" />}
+                              >
+                                {(source) => <AppOverviewSource source={source} />}
+                              </QueryView>
+                            ) : (
+                              <p className="py-5 text-sm text-muted-foreground">
+                                Source is restricted.
+                              </p>
+                            )
+                          }
+                        />
+                      );
+                    return (
+                      <QueryResult
+                        result={inventory.result}
+                        Failure={HostedFailure}
+                        retry={inventory.refresh}
+                        pending={pending}
+                      >
+                        {(inventory) => {
+                          return context === undefined && profile !== undefined ? (
+                            empty
+                          ) : (
+                            <div className="max-w-3xl space-y-4 p-5 max-[740px]:p-4">
+                              {/* Editors capture their target on open. A newly created profile must not reset an active draft. */}
+                              <AppAccounts
+                                app={current}
+                                profile={context?.profile}
+                                accounts={inventory.accounts}
+                                redirectUri={inventory.accountSetup.redirectUri}
+                                onSelected={(id) => select(id, "accounts")}
+                                onCreateProfile={
+                                  personal ? () => setSetupRequest(crypto.randomUUID()) : undefined
+                                }
+                              />
+                              {context?.profile && (
+                                <ProfileStatus
+                                  profile={context.profile}
+                                  retry={
+                                    profileMutations({
+                                      organization,
+                                      app: current.id,
+                                      profile: context.profile.id,
+                                    }).reconcile
+                                  }
+                                  Failure={HostedFailure}
+                                />
+                              )}
+                              {setupActions}
+                            </div>
+                          );
+                        }}
+                      </QueryResult>
+                    );
+                  }}
                 </QueryResult>
               );
             }}

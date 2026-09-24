@@ -31,7 +31,7 @@ export function AppTools({
   profile,
 }: {
   readonly app: App;
-  readonly accounts: readonly AccountSummary[];
+  readonly accounts: readonly AccountSummary[] | undefined;
   readonly selected: string | undefined;
   readonly profile: Profile | undefined;
 }) {
@@ -43,10 +43,11 @@ export function AppTools({
         This profile is disabled. Enable it from the profile menu to use its tools.
       </p>
     );
-  const readiness = appToolReadiness(app, profile?.accounts ?? {}, accounts);
-  if (readiness.state === "not-deployed")
+  const readiness =
+    accounts === undefined ? undefined : appToolReadiness(app, profile?.accounts ?? {}, accounts);
+  if (app.activeDeployment === null)
     return <p className="p-5 text-sm text-muted-foreground">Deploy this app to load its tools.</p>;
-  if (readiness.state !== "ready")
+  if (readiness !== undefined && readiness.state !== "ready")
     return (
       <p className="p-5 text-sm text-muted-foreground">
         Review the selected accounts in{" "}

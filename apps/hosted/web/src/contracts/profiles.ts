@@ -25,6 +25,10 @@ const source = Atom.family((key: AppKey) =>
   ),
 );
 const query = Atom.family((key: AppKey) => pollingQuery(source(key)));
+/** Route preload warms the same source without starting a mounted-view poll. */
+export const profilesSourceAtom = (key: { organization: OrganizationReference; app: AppId }) =>
+  source(new AppKey(key));
+
 /** Shared per-app metadata for the picker and setup form. */
 export const profilesAtom = (key: { organization: OrganizationReference; app: AppId }) =>
   query(new AppKey({ organization: key.organization, app: key.app }));

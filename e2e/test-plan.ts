@@ -1082,6 +1082,16 @@ export const scenarios = {
       cloud: na("This journey checks local pairing and live app reads."),
     },
   },
+  appRequestOrder: {
+    fixtures: "actors",
+    file: "app-request-order.spec.ts",
+    title: "App tabs start runtime and source reads before inventory and workspace resolve",
+    targets: {
+      "self-host": scheduled,
+      cloud: scheduled,
+      local: na("This journey checks hosted app metadata requests."),
+    },
+  },
   appDetailLoading: {
     fixtures: "actors",
     file: "app-detail-loading.spec.ts",
