@@ -1,18 +1,17 @@
-import { storedDeployment } from "./apps.ts";
 import { evaluationFailure, snapshot as invocation, resolve } from "./tools.ts";
 import { AppSkills } from "apps/contracts";
 import { AppEvaluationFailed } from "../contracts/tools.ts";
-import { AppNotDeployed } from "../contracts/apps.ts";
 /** Skill reads project one authorized runtime catalog, or a retained pre-capability folder. */
 import { Crypto, Effect, Encoding, Schema } from "effect";
-import type { Executor } from "../contracts/executor.ts";
+import type { BlobStorage } from "../contracts/blobs.ts";
 import { AppSkillInputs, AppSkillNotFound, SkillRevisionChanged } from "../contracts/skills.ts";
 import { RequestInvalid, StorageError } from "../contracts/shared.ts";
 import { prepareAppSkills } from "./skill-source.ts";
+import { readDeploymentSource } from "./deployment-source.ts";
 
 /** Bind skill reads to the same app lookup and retained-source lineage used by deployment inspection. */
 export const makeSkills = (
-  apps: Pick<Executor["apps"], "get" | "source">,
+  blobs: BlobStorage,
   db: import("./database.ts").Query,
   runtime: import("../contracts/runtime.ts").Runtime,
   resolveAccount: ReturnType<typeof import("./oauth.ts").makeOAuth>["resolve"],
@@ -21,20 +20,14 @@ export const makeSkills = (
 ) => {
   const snapshot = (input: typeof AppSkillInputs.list.Type) =>
     Effect.gen(function* () {
-      const app = yield* apps.get(input);
-      const deployment = input.deployment ?? app.activeDeployment;
-      if (deployment === null) return yield* new AppNotDeployed({ app: app.id });
-      const source = yield* apps.source({
-        ...input,
-        deployment,
-      });
-      const retained = yield* storedDeployment(db, app, deployment);
+      const state = yield* invocation(db, { ...input, skillCatalog: true });
+      const { app } = state;
+      const deployment = state.deployment.id;
       // A retained framework that predates dynamic skills cannot receive the new command.
       // Its immutable bundled skills remain readable until its owner deploys a newer build.
       const live =
-        retained.requirements.capabilities?.skills === true
+        state.deployment.requirements.capabilities?.skills === true
           ? yield* Effect.gen(function* () {
-              const state = yield* invocation(db, { ...input, deployment });
               const context = yield* resolve(state, resolveAccount, lifecycle);
               const skills = yield* runtime
                 .skills({ app: app.id, build: state.deployment.build, ...context })
@@ -49,7 +42,12 @@ export const makeSkills = (
                 );
               return { skills, profile: state.profile };
             })
-          : { skills: yield* prepareAppSkills(source.files), profile: undefined };
+          : {
+              skills: yield* readDeploymentSource(blobs, deployment).pipe(
+                Effect.flatMap(prepareAppSkills),
+              ),
+              profile: undefined,
+            };
       const skills = yield* Schema.decodeUnknownEffect(AppSkills)(live.skills).pipe(
         Effect.mapError(
           () =>
@@ -78,7 +76,7 @@ export const makeSkills = (
         });
       return {
         app: { id: app.id, name: app.name, slug: app.slug },
-        deployment: source.id,
+        deployment,
         revision,
         skills,
         ...(live.profile === undefined

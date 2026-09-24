@@ -23,6 +23,7 @@ import {
   StorageError,
   type AppId,
   type DeploymentId,
+  type OwnerId,
 } from "../contracts/shared.ts";
 import type { makeOAuth } from "./oauth.ts";
 import {
@@ -54,9 +55,12 @@ export function snapshot(
   db: Query,
   input: {
     app: AppId;
+    owner?: OwnerId | undefined;
     deployment?: DeploymentId | undefined;
     profile?: ProfileId | undefined;
     expectedProfileRevision?: number | undefined;
+    /** Retained skills predating the runtime capability need no account evaluation. */
+    skillCatalog?: true;
   },
   savedAccounts?: import("../contracts/apps.ts").SelectedAccounts,
   savedProfileRevision?: number,
@@ -67,7 +71,11 @@ export function snapshot(
       const row = yield* query(() =>
         tx.findFirst("apps", {
           join: (b) => b.deployment(),
-          where: (b) => b("id", "=", input.app),
+          where: (b) =>
+            b.and(
+              b("id", "=", input.app),
+              input.owner === undefined ? true : b("owner", "=", input.owner),
+            ),
         }),
       );
       if (row === null) return yield* new AppNotFound({ app: input.app });
@@ -85,6 +93,8 @@ export function snapshot(
             : yield* Schema.decodeUnknownEffect(StoredDeployment)(row.deployment).pipe(
                 Effect.mapError(() => new StorageError()),
               );
+      if (input.skillCatalog && deployment.requirements.capabilities?.skills !== true)
+        return { app, deployment, selections: [], profile: undefined, accounts: {} };
       const profile =
         input.profile === undefined
           ? undefined
