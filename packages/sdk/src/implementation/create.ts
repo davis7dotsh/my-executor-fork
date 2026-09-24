@@ -84,7 +84,7 @@ export const createExecutor = (
       },
       apps: { ...apps, profiles: setup.operations },
       owners: makeOwners(db),
-      skills: makeSkills(apps, db, runtime, oauth.resolve, crypto, options.lifecycle),
+      skills: makeSkills(options.blobs, db, runtime, oauth.resolve, crypto, options.lifecycle),
       ...webhooks,
       appData: makeAppData(
         options.storage,
