@@ -27,9 +27,30 @@ const RequestContext = Schema.Struct({
 const requestContext = Schema.decodeUnknownOption(
   Schema.Union([RequestContext, Schema.fromJsonString(RequestContext)]),
 );
+const RequestLifecycle = Schema.Struct({
+  message: Schema.Literal("executor.request.lifecycle"),
+  annotations: Schema.Struct({
+    "executor.isolate.id": Schema.String.check(
+      Schema.isPattern(/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/),
+    ),
+    "executor.isolate.request_seq": Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)),
+    "executor.isolate.age_ms": Schema.Number.check(
+      Schema.isFinite(),
+      Schema.isGreaterThanOrEqualTo(0),
+    ),
+    "executor.handler.started_at_ms": Schema.Number.check(
+      Schema.isFinite(),
+      Schema.isGreaterThanOrEqualTo(0),
+    ),
+  }),
+});
+const requestLifecycle = Schema.decodeUnknownOption(
+  Schema.Union([RequestLifecycle, Schema.fromJsonString(RequestLifecycle)]),
+);
 const phaseAttribute = {
   "alchemy.runtime.initialize": "executor.initialize_ms",
   "alchemy.runtime.wait": "executor.runtime_wait_ms",
+  "alchemy.handler": "executor.bridge_handler_ms",
   "alchemy.response": "executor.response_ready_ms",
   "alchemy.cleanup": "executor.cleanup_ms",
   "alchemy.do.initialize": "executor.do_initialize_ms",
@@ -57,6 +78,8 @@ export const invocationSummary = (input: unknown) =>
       }
       for (const log of event.logs)
         for (const message of log.message) {
+          const lifecycle = requestLifecycle(message);
+          if (Option.isSome(lifecycle)) Object.assign(attributes, lifecycle.value.annotations);
           const request = requestContext(message);
           if (Option.isSome(request)) {
             Object.assign(attributes, request.value.annotations);
@@ -72,6 +95,14 @@ export const invocationSummary = (input: unknown) =>
         }
       if (event.eventTimestamp !== null)
         attributes["cloudflare.event.timestamp_ms"] = event.eventTimestamp;
+      const handlerStartedAt = attributes["executor.handler.started_at_ms"];
+      // This measures platform dispatch to our handler. Network and time before platform dispatch remain unmeasured.
+      if (
+        event.eventTimestamp !== null &&
+        typeof handlerStartedAt === "number" &&
+        handlerStartedAt >= event.eventTimestamp
+      )
+        attributes["executor.pre_handler_ms"] = handlerStartedAt - event.eventTimestamp;
       if (event.scriptName !== null) attributes["cloudflare.script_name"] = event.scriptName;
       if (event.scriptVersion !== undefined)
         attributes["cloudflare.script_version.id"] = event.scriptVersion.id;

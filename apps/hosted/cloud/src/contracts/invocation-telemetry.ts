@@ -21,6 +21,7 @@ export const InvocationPhase = Schema.Struct({
   name: Schema.Literals([
     "alchemy.runtime.initialize",
     "alchemy.runtime.wait",
+    "alchemy.handler",
     "alchemy.response",
     "alchemy.cleanup",
     "alchemy.do.initialize",
