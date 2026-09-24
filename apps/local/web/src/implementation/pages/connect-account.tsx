@@ -3,9 +3,9 @@ import type { DashboardError } from "../../contracts/errors.ts";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react";
 import { Exit, Cause, Result } from "effect";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { LockKeyholeIcon, Tick02Icon } from "@hugeicons/core-free-icons";
+import { LockKeyholeIcon, PackageIcon, Tick02Icon } from "@hugeicons/core-free-icons";
 import type { AccountConnection } from "@executor-js/sdk";
 import type { ConnectionGrant } from "@executor-js/local-server/account-connections";
 import { providerDisplayUrl } from "@executor-js/ui/contracts/dashboard";
@@ -15,7 +15,7 @@ import {
   submitConnectionAtom,
   cancelConnectionAtom,
 } from "../../contracts/account-connections.ts";
-import { faviconUrl } from "@executor-js/ui/contracts/icons";
+import { faviconUrlAtom } from "@executor-js/ui/contracts/icons";
 import { Button } from "@executor-js/ui/components/button";
 import { Failure } from "../components/common.tsx";
 import { AccountForm } from "@executor-js/ui/dashboard/account-form";
@@ -75,7 +75,9 @@ function ConnectionForm({
   const submit = useAtomSet(submitConnectionAtom, { mode: "promiseExit" });
   const cancel = useAtomSet(cancelConnectionAtom, { mode: "promiseExit" });
   const refresh = useAtomRefresh(connectionDetailsAtom);
-  const icon = faviconUrl(providerDisplayUrl(connection.provider.definition), 32);
+  const displayUrl = providerDisplayUrl(connection.provider.definition);
+  const iconAtom = useMemo(() => faviconUrlAtom({ url: displayUrl, size: 32 }), [displayUrl]);
+  const icon = useAtomValue(iconAtom);
   if (state.status !== "pending")
     return (
       <div className="account-connect-result py-[24px] px-0 text-center [&_>_svg]:[margin:0_auto_18px]">
@@ -106,8 +108,16 @@ function ConnectionForm({
     );
   return (
     <>
-      <header className="account-connect-heading mb-7 [&_>_img]:w-9 [&_>_img]:h-9 [&_>_img]:mb-4.5">
-        {icon && <img src={icon} alt="" referrerPolicy="no-referrer" />}
+      <header className="account-connect-heading mb-7">
+        {displayUrl && (
+          <span className="mb-4.5 flex h-9 w-9 items-center justify-center" aria-hidden>
+            {icon ? (
+              <img src={icon} alt="" width={36} height={36} referrerPolicy="no-referrer" />
+            ) : (
+              <HugeiconsIcon icon={PackageIcon} size={32} aria-hidden />
+            )}
+          </span>
+        )}
         <h1 className="text-[22px] font-semibold tracking-[-0.035em] leading-[1.35] [&>span]:text-muted-foreground [&>span]:text-[13px] [&>span]:font-mono [&>span]:font-normal [&>span]:ml-[8px] [&>span]:align-middle">
           Connect {connection.provider.definition.name}
         </h1>

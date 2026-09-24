@@ -1,5 +1,4 @@
-import Markdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { DeferredMarkdown } from "./deferred-markdown.tsx";
 import type { Components } from "react-markdown";
 
 const components: Components = {
@@ -22,9 +21,5 @@ const components: Components = {
 
 /** Render tool-authored Markdown without enabling raw HTML or unsafe links. */
 export function ToolMarkdown({ children }: { readonly children: string }) {
-  return (
-    <Markdown remarkPlugins={[remarkGfm]} skipHtml components={components}>
-      {children}
-    </Markdown>
-  );
+  return <DeferredMarkdown components={components}>{children}</DeferredMarkdown>;
 }

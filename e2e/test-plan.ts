@@ -1765,6 +1765,18 @@ export const scenarios = {
       ),
     },
   },
+  deferredMarkdown: {
+    fixtures: "actors",
+    file: "deferred-markdown.spec.ts",
+    title: "on-demand Markdown keeps skills readable and safe during loading",
+    targets: {
+      "self-host": scheduled,
+      cloud: scheduled,
+      local: na(
+        "The same shared renderer is exercised through hosted membership and skill navigation.",
+      ),
+    },
+  },
   appSkills: {
     fixtures: "actors",
     file: "app-skills.spec.ts",
