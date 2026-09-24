@@ -143,7 +143,8 @@ export const checkAppLoading = (input: {
             yield* inventory.requested;
             yield* browser.use(
               "Known empty requirements stay visible while inventory loads",
-              (page) => page.getByText("No accounts required.", { exact: true }).waitFor(),
+              (page) =>
+                page.getByRole("heading", { name: "No accounts required", exact: true }).waitFor(),
             );
             expect(
               yield* browser.use("No invented account rows appear", (page) =>

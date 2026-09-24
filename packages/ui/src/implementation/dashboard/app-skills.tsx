@@ -13,8 +13,7 @@ import type { SkillBindings } from "../../contracts/app-browser.ts";
 import type { FailureProps } from "../../contracts/dashboard.ts";
 import { Option } from "effect";
 import { Atom, AsyncResult } from "effect/unstable/reactivity";
-import type { AppSourceView } from "@executor-js/app-management/contracts";
-import { QueryView, useQuery } from "./context.tsx";
+import { QueryResult, QueryView, useQuery } from "./context.tsx";
 import { SkillBrowserLoading } from "./app-browser-loading.tsx";
 import { CopyButton } from "./code.tsx";
 import { EmptyStatePanel } from "./empty-state.tsx";
@@ -62,22 +61,13 @@ export function AppSkills<E>({
         />
       )}
       {editing !== undefined && canEdit ? (
-        <QueryView
-          query={editing.atoms.workspace(app.id)}
+        <EditableSkills
+          app={app}
+          bindings={bindings}
+          editing={editing}
           Failure={Failure}
-          pending={<SkillBrowserLoading />}
-        >
-          {(source) => (
-            <EditableSkills
-              app={app}
-              source={source}
-              bindings={bindings}
-              editing={editing}
-              Failure={Failure}
-              onCommitted={setCommitted}
-            />
-          )}
-        </QueryView>
+          onCommitted={setCommitted}
+        />
       ) : app.activeDeployment === null ? (
         <EmptyStatePanel title="No deployment yet">
           The app owner needs to deploy this app before its skills are available.
@@ -103,19 +93,18 @@ const undeployedCatalog = Atom.make(AsyncResult.success(undefined));
 
 function EditableSkills<E>({
   app,
-  source,
   bindings,
   editing,
   Failure,
   onCommitted,
 }: {
   readonly app: App;
-  readonly source: typeof AppSourceView.Type;
   readonly bindings: SkillBindings<E>;
   readonly editing: SkillEditing<E>;
   readonly Failure: ComponentType<FailureProps<E>>;
   readonly onCommitted: (result: Committed) => void;
 }) {
+  const workspace = useQuery(editing.atoms.workspace(app.id));
   const { result, data, refresh } = useQuery<AppSkillBundle | undefined, E>(
     app.activeDeployment === null ? undeployedCatalog : bindings.bundle,
   );
@@ -128,14 +117,23 @@ function EditableSkills<E>({
       {AsyncResult.isFailure(result) && (
         <Failure cause={result.cause} retry={refresh} retrying={result.waiting} />
       )}
-      <SkillWorkspace
-        app={app}
-        source={source}
-        {...(catalog === undefined ? {} : { catalog })}
-        editing={editing}
+      <QueryResult
+        result={workspace.result}
         Failure={Failure}
-        onCommitted={onCommitted}
-      />
+        retry={workspace.refresh}
+        pending={<SkillBrowserLoading />}
+      >
+        {(source) => (
+          <SkillWorkspace
+            app={app}
+            source={source}
+            {...(catalog === undefined ? {} : { catalog })}
+            editing={editing}
+            Failure={Failure}
+            onCommitted={onCommitted}
+          />
+        )}
+      </QueryResult>
     </>
   );
 }

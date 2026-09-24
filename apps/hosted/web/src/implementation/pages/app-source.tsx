@@ -16,7 +16,7 @@ import {
   DialogTitle,
 } from "@executor-js/ui/components/dialog";
 import { Exit, type Cause } from "effect";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { Atom, AsyncResult } from "effect/unstable/reactivity";
 import { useContext, useState } from "react";
 import {
   activateAppAtom,
@@ -29,11 +29,16 @@ import type { HostedError } from "../../contracts/errors.ts";
 import { HostedFailure } from "../components/dashboard-bindings.tsx";
 import { useOrganizationRoute } from "../components/organization.tsx";
 
+const undeployedSource = Atom.make(AsyncResult.initial<never, never>());
+
 /** Hosts own reads and activation authority; source browsing shares the local presentation. */
 export function AppDeployments({ app }: { readonly app: App }) {
   const { organization } = useOrganizationRoute();
   const [selected, setSelected] = useState<DeploymentId>();
   const deployment = selected ?? app.activeDeployment;
+  useAtomValue(
+    deployment === null ? undeployedSource : sourceAtom({ organization, app: app.id, deployment }),
+  );
   if (deployment === null)
     return (
       <EmptyStatePanel title="No deployments yet">

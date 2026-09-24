@@ -2,7 +2,8 @@ import { sessionInitialValues } from "@executor-js/hosted-web/contracts/auth";
 import { Effect } from "effect";
 import { PageTelemetry } from "@executor-js/hosted-web/contracts/telemetry";
 import { BrowserTelemetry } from "@executor-js/telemetry/browser";
-import { RegistryProvider } from "@effect/atom-react";
+import { RegistryContext, scheduleTask } from "@effect/atom-react";
+import { AtomRegistry } from "effect/unstable/reactivity";
 import { RouterProvider } from "@tanstack/react-router";
 import { createRoot } from "react-dom/client";
 import { createDashboardRouter } from "./implementation/router.ts";
@@ -11,7 +12,13 @@ import "@executor-js/hosted-web/styles";
 const root = document.getElementById("root");
 if (root === null) throw new Error("Dashboard root is missing");
 
-const router = createDashboardRouter();
+const registry = AtomRegistry.make({
+  initialValues: sessionInitialValues(),
+  scheduleTask,
+  defaultIdleTTL: 30_000,
+  timeoutResolution: 1000,
+});
+const router = createDashboardRouter(registry);
 router.subscribe("onBeforeNavigate", ({ toLocation }) => {
   PageTelemetry.runFork(
     Effect.flatMap(BrowserTelemetry, (telemetry) =>
@@ -32,10 +39,11 @@ void PageTelemetry.runPromise(
 ).catch((error) => console.error(error));
 if (import.meta.hot)
   import.meta.hot.dispose(() => {
+    registry.dispose();
     void PageTelemetry.dispose().catch((error) => console.error(error));
   });
 createRoot(root).render(
-  <RegistryProvider initialValues={sessionInitialValues()}>
+  <RegistryContext.Provider value={registry}>
     <RouterProvider router={router} />
-  </RegistryProvider>,
+  </RegistryContext.Provider>,
 );

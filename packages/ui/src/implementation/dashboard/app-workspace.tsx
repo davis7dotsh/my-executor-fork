@@ -35,6 +35,8 @@ export function AppWorkspace<E>({
   readonly onApp: AppAcknowledgement;
   readonly view: "source" | "history";
 }) {
+  // The header and history view share this query, independently of the source listing.
+  useAtomValue(atoms.history(app.id));
   return (
     <QueryView
       query={atoms.source(app.id)}

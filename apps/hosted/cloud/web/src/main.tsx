@@ -4,7 +4,8 @@ import { startAnalytics, capturePageview, pauseReplay } from "./implementation/a
 import { Effect } from "effect";
 import { PageTelemetry } from "@executor-js/hosted-web/contracts/telemetry";
 import { BrowserTelemetry } from "@executor-js/telemetry/browser";
-import { RegistryProvider } from "@effect/atom-react";
+import { RegistryContext, scheduleTask } from "@effect/atom-react";
+import { AtomRegistry } from "effect/unstable/reactivity";
 import { RouterProvider } from "@tanstack/react-router";
 import { createRoot } from "react-dom/client";
 import { createDashboardRouter } from "./implementation/router.ts";
@@ -22,7 +23,13 @@ const publicEmailPage = window.location.pathname.startsWith("/email/unsubscribe"
 if (!publicEmailPage) {
   startAnalytics();
 }
-const router = createDashboardRouter();
+const registry = AtomRegistry.make({
+  initialValues: initialValues,
+  scheduleTask,
+  defaultIdleTTL: 30_000,
+  timeoutResolution: 1000,
+});
+const router = createDashboardRouter(registry);
 if (!publicEmailPage) {
   router.subscribe("onBeforeNavigate", ({ toLocation }) => {
     pauseReplay();
@@ -47,12 +54,13 @@ if (!publicEmailPage) {
 }
 if (import.meta.hot)
   import.meta.hot.dispose(() => {
+    registry.dispose();
     void PageTelemetry.dispose().catch((error) => console.error(error));
   });
 createRoot(root, reactErrorHandlers).render(
-  <RegistryProvider initialValues={initialValues}>
+  <RegistryContext.Provider value={registry}>
     <UIObservation>
       <RouterProvider router={router} />
     </UIObservation>
-  </RegistryProvider>,
+  </RegistryContext.Provider>,
 );
