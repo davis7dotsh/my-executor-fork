@@ -2,9 +2,9 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { PackageIcon, Search01Icon } from "@hugeicons/core-free-icons";
 import { Atom } from "effect/unstable/reactivity";
 import { useOptionalDashboard } from "./context.tsx";
-import { useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useAtomValue } from "@effect/atom-react";
-import { faviconUrl } from "../../contracts/icons.ts";
+import { faviconUrlAtom } from "../../contracts/icons.ts";
 import { Input } from "@executor-js/ui/components/input";
 import { cn } from "@executor-js/ui/lib/utils";
 const noDomains = Atom.make(new Map<string, string | null>());
@@ -27,7 +27,9 @@ export function ProviderIcon({
     url ??
     domains.get(normalized) ??
     (/^[a-z\d-]+(?:\.[a-z\d-]+)+$/i.test(normalized) ? normalized : null);
-  const source = normalized === "executor" ? "/favicon.png" : faviconUrl(domain, size);
+  const iconAtom = useMemo(() => faviconUrlAtom({ url: domain, size }), [domain, size]);
+  const favicon = useAtomValue(iconAtom);
+  const source = normalized === "executor" ? "/favicon.png" : favicon;
   const icon = source !== null && !failed.includes(source) ? source : null;
   return (
     <span

@@ -1,6 +1,5 @@
 import type { AppSkillDocument } from "@executor-js/sdk";
-import Markdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { DeferredMarkdown } from "./deferred-markdown.tsx";
 import { Code } from "./code.tsx";
 import { markdownProse } from "./markdown-prose.ts";
 
@@ -23,9 +22,7 @@ export function SkillContent({
         <Code code={document.content} path={document.file} />
       ) : (
         <div className={markdownProse}>
-          <Markdown
-            remarkPlugins={[remarkGfm]}
-            skipHtml
+          <DeferredMarkdown
             components={{
               img: ({ alt }) => <span>{alt}</span>,
               a: ({ href, children }) => {
@@ -35,7 +32,11 @@ export function SkillContent({
                       {children}
                     </a>
                   );
-                if (href !== undefined && !/^(?:[a-z][a-z0-9+.-]*:|\/|#)/i.test(href)) {
+                if (
+                  href !== undefined &&
+                  href !== "" &&
+                  !/^(?:[a-z][a-z0-9+.-]*:|\/|#)/i.test(href)
+                ) {
                   const path = new URL(
                     href,
                     `https://skill.invalid/${document.file}`,
@@ -59,7 +60,7 @@ export function SkillContent({
             }}
           >
             {content}
-          </Markdown>
+          </DeferredMarkdown>
         </div>
       )}
     </div>
