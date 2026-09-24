@@ -71,6 +71,8 @@ import { AppDataSupervisor, AppDataSupervisorLive } from "./infrastructure/app-d
 import { cloudDevelopment } from "./contracts/development.ts";
 import { requestServices } from "@executor-js/hosted-server";
 import { requestTiming } from "@executor-js/telemetry/http";
+import { catalogSource } from "@executor-js/catalog";
+import { cachedCatalogSource } from "./implementation/catalog-cache.ts";
 
 import { Api } from "./infrastructure/api-worker.ts";
 export { Api } from "./infrastructure/api-worker.ts";
@@ -234,7 +236,14 @@ export default Api.make(
     const api = cloudApi(document).pipe(
       Layer.provide(appUi.dashboard),
       Layer.provide(requestServices(auth.appSessions).layer),
-      HttpRouter.provideRequest(catalogLive(executorSkillFiles(authoring), document, egress)),
+      HttpRouter.provideRequest(
+        catalogLive(
+          executorSkillFiles(authoring),
+          document,
+          egress,
+          cachedCatalogSource(auth.origin, catalogSource(egress.client)),
+        ),
+      ),
       Layer.provide(schedules),
       Layer.provide(billing),
       Layer.provide(Layer.succeed(ExecutionAdmission, meter.consume)),
