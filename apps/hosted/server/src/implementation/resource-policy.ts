@@ -52,8 +52,9 @@ const AppPolicy = Schema.Struct({
   granted: Schema.Boolean,
 });
 /** Resolve app policies in one read, retaining tenant and group checks for every row. */
-const applicationAccesses = (apps: readonly AppId[], actor: ResourceAuthority) =>
+export const applicationAccesses = (apps: readonly AppId[], actor: ResourceAuthority) =>
   Effect.gen(function* () {
+    if (apps.length === 0) return [];
     const sql = yield* policyDatabase;
     const rows = yield* sql`select p.id as app, p.creator_id as creator, p.audience, p.revision,
     array(select g.group_id from hosted_app_groups g where g.app_id = p.id order by g.group_id) as groups,
@@ -106,8 +107,9 @@ const AccountPolicy = Schema.Struct({
   granted: Schema.Boolean,
 });
 /** Read account policies together; personal accounts remain private even from administrators. */
-const accountAccesses = (accounts: readonly AccountId[], actor: ResourceAuthority) =>
+export const accountAccesses = (accounts: readonly AccountId[], actor: ResourceAuthority) =>
   Effect.gen(function* () {
+    if (accounts.length === 0) return [];
     const sql = yield* policyDatabase;
     const rows = yield* sql`select p.account_id as account, p.creator_id as creator, p.kind,
     p.personal_user_id as "personalUser", p.audience, p.revision,

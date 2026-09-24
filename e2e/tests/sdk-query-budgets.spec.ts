@@ -135,6 +135,43 @@ layer(HostedLive, { excludeTestServices: true })("SDK query budgets", (it) => {
             "Ten accounts need one joined app read, one profile read and one account batch",
           )
           .toBe(3);
+        const directorySchema = Schema.Struct({
+          apps: Schema.Array(
+            Schema.Struct({
+              app: Resource,
+              profiles: Schema.Array(Resource),
+            }),
+          ),
+          accounts: Schema.Array(Schema.Struct({ account: Resource })),
+        });
+        const directoryResponse = yield* api.request(actors.owner, "GET", `${prefix}/resources`);
+        expect(directoryResponse.status).toBe(200);
+        const directoryTrace = yield* traceId;
+        const directory = yield* body(directorySchema, directoryResponse);
+        expect(
+          directory.apps.find((item) => item.app.id === app.id)?.profiles.map((item) => item.id),
+        ).toEqual([profile.id]);
+        expect(directory.accounts.map((item) => item.account.id)).toEqual(
+          expect.arrayContaining(accounts),
+        );
+        const directoryQueries = yield* queries(directoryTrace, "product.operation");
+        yield* evidence.json("resource-directory-query-budget.json", {
+          traceId: directoryTrace,
+          accounts: accounts.length,
+          count: directoryQueries.length,
+        });
+        expect
+          .soft(
+            directoryQueries.length,
+            "Directory reads batch apps, profiles, accounts and providers",
+          )
+          .toBe(8);
+        const managed = yield* body(
+          directorySchema,
+          yield* api.request(actors.admin, "GET", `${prefix}/resources?view=managed`),
+        );
+        expect(managed.apps.find((item) => item.app.id === app.id)?.profiles).toEqual([]);
+        expect(managed.accounts.some((item) => accounts.includes(item.account.id))).toBe(false);
         expect(
           (yield* selectProfileAccounts(actors.owner, path, profile.id, {
             workspaces: [...selected, ...selected],
