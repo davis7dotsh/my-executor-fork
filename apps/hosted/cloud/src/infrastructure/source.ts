@@ -3,6 +3,7 @@ import { gitSourceStorage } from "@executor-js/app-source";
 import { cloudflareRepositories, type ArtifactsTokens } from "@executor-js/app-source/cloudflare";
 import { Config, Effect, Schema } from "effect";
 import { cloudSourceNamespace } from "./artifacts-tokens.ts";
+import { cachedRepositories } from "../implementation/repository-cache.ts";
 
 /** Resolve bindings during composition; each Git operation remains scoped to its invocation. */
 export const cloudAppSources = (tokens: ArtifactsTokens) =>
@@ -13,6 +14,9 @@ export const cloudAppSources = (tokens: ArtifactsTokens) =>
       ),
     );
     const namespace = yield* cloudSourceNamespace;
-    const repositories = cloudflareRepositories(tokens, { accountId, namespace });
+    const repositories = cachedRepositories(
+      cloudflareRepositories(tokens, { accountId, namespace }),
+      `${accountId}/${namespace}`,
+    );
     return { repositories, sources: gitSourceStorage(repositories) };
   }).pipe(Effect.orDie);
