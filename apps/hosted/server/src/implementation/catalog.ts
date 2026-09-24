@@ -1,6 +1,6 @@
 import type { HostedApiDocument } from "../contracts/api.ts";
 /** Supply shared catalog reads and source preparation to hosted handlers. */
-import { CatalogImportFailed, createCatalog } from "@executor-js/catalog";
+import { CatalogImportFailed, createCatalog, type CatalogSource } from "@executor-js/catalog";
 import type { SourceFile } from "@executor-js/sdk/core";
 import { Effect, Layer } from "effect";
 import type { HostEgress } from "@executor-js/utils/url-policy";
@@ -13,12 +13,13 @@ export const catalogLive = (
   skills: readonly SourceFile[],
   document: HostedApiDocument,
   egress: HostEgress,
+  source?: CatalogSource,
 ) =>
   Layer.effect(
     HostedCatalog,
     Effect.gen(function* () {
       const { origin } = yield* Authentication;
-      const published = createCatalog(egress);
+      const published = createCatalog(egress, source);
       const executor = executorCatalogEntry(origin);
       return HostedCatalog.of({
         list: published.list.pipe(

@@ -27,6 +27,7 @@
     "@executor-js/app-registry": "workspace:*",
     "@executor-js/app-source": "workspace:*",
     "@executor-js/app-templates": "workspace:*",
+    "@executor-js/catalog": "workspace:*",
     "@executor-js/devtools": "workspace:*",
     "@executor-js/hosted-server": "workspace:*",
     "@executor-js/marketing": "workspace:*",
