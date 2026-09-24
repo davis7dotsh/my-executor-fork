@@ -1,6 +1,8 @@
 import { inferFullPath } from "@tanstack/router-generator";
 import type { GeneratorPlugin } from "@tanstack/router-generator";
 import type { Plugin } from "vite-plus";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 
 // Cloudflare and TanStack have different path grammars. Reject shapes we cannot
 // translate faithfully rather than shipping a dashboard with broken deep links.
@@ -58,6 +60,45 @@ export const cloudflareRedirects = (): {
     assets: {
       name: "cloudflare-dashboard-redirects",
       config: () => ({ appType: "mpa" }),
+      configResolved(config) {
+        // Public files have stable names. Keep them outside the generated asset
+        // namespace so its immutable policy can never cache a changing URL.
+        if (config.command === "build" && existsSync(join(config.publicDir, "assets")))
+          throw new Error("Public dashboard files must remain outside /assets/.");
+      },
+      transformIndexHtml: {
+        order: "post",
+        handler(html, context) {
+          const bundle = context.bundle;
+          if (bundle === undefined) return;
+          const main = Object.values(bundle)
+            .filter((output) => output.type === "chunk")
+            .find((output) => output.facadeModuleId?.endsWith("/src/main.tsx"));
+          if (main === undefined) throw new Error("Dashboard main chunk is missing.");
+          const files = new Set<string>();
+          const visit = (fileName: string) => {
+            if (files.has(fileName)) return;
+            const chunk = bundle[fileName];
+            if (chunk?.type !== "chunk") return;
+            files.add(fileName);
+            chunk.imports.forEach(visit);
+          };
+          // Preload the compiled static closure, not route chunks or other
+          // dynamic imports. Fetching modules does not evaluate them: boot still
+          // installs reporting before its caught dynamic import runs main.
+          visit(main.fileName);
+          return [...files]
+            .filter(
+              (fileName) =>
+                !html.includes(`href="/${fileName}"`) && !html.includes(`src="/${fileName}"`),
+            )
+            .map((fileName) => ({
+              tag: "link",
+              attrs: { rel: "modulepreload", crossorigin: "", href: `/${fileName}` },
+              injectTo: "head" as const,
+            }));
+        },
+      },
       configureServer(server) {
         // Run after asset/API middleware, before HTML transformation. Only page
         // paths from the same route tree used for deployment receive the SPA.
@@ -88,7 +129,7 @@ export const cloudflareRedirects = (): {
             next();
           });
       },
-      generateBundle() {
+      generateBundle(_options, bundle) {
         if (patterns === undefined)
           return this.error("TanStack did not supply the dashboard route tree.");
         const rewrites = new Set<string>();
@@ -112,16 +153,28 @@ export const cloudflareRedirects = (): {
           .map((rewrite) => rewrite.split(" ")[0])
           .filter((pattern): pattern is string => pattern !== undefined)
           .sort();
+        // Vite emits content hashes for generated scripts, styles, fonts and
+        // images. Fail closed if future build configuration removes a hash.
+        for (const fileName of Object.keys(bundle)) {
+          if (
+            fileName.startsWith("assets/") &&
+            !fileName.endsWith(".map") &&
+            !/-[A-Za-z0-9_-]{8}\.[^.]+$/.test(fileName)
+          )
+            return this.error(`Dashboard asset "${fileName}" needs a content hash.`);
+        }
         this.emitFile({
           type: "asset",
           fileName: "_headers",
           source:
+            "/assets/*\n  Cache-Control: public, max-age=31536000, immutable\n\n" +
             framed
               .map(
                 (pattern) =>
                   `${pattern}\n  Content-Security-Policy: frame-ancestors 'none'\n  X-Frame-Options: DENY`,
               )
-              .join("\n\n") + "\n",
+              .join("\n\n") +
+            "\n",
         });
       },
     },
