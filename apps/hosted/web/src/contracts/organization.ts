@@ -84,10 +84,12 @@ export const OrganizationSummary = Schema.Struct({
 });
 export type OrganizationSummary = typeof OrganizationSummary.Type;
 
-/** Refresh when the session changes, including switching users in this browser. */
+/** Only an identity change invalidates the org list, not session waiting/hint transitions. */
+const sessionUserId = Atom.map(sessionAtom, (session) =>
+  Option.getOrNull(Option.map(AsyncResult.value(session), (value) => value?.user.id ?? null)),
+);
 const organizationsQuery = BrowserAtoms.atom((get) => {
-  const session = get(sessionAtom);
-  if (!AsyncResult.isSuccess(session) || session.value === null) return Effect.succeed([]);
+  if (get(sessionUserId) === null) return Effect.succeed([]);
   return request("list", (options) => organizationOperations(options).list()).pipe(
     Effect.flatMap(Schema.decodeUnknownEffect(Schema.Array(OrganizationSummary))),
   );

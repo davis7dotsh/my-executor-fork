@@ -1,9 +1,10 @@
+import { appUiReadinessSchedule, AppUiReadinessPending } from "./app-ui-polling.ts";
 import { organizationHttpClient } from "./organization-reference.ts";
 /** Host-specific pages opt into the shared private-app browser contract. */
 import { HostedAppUiApi, AppSignInId } from "@executor-js/hosted-server/app-ui/contracts";
 import type { OrganizationReference } from "@executor-js/hosted-server/organization";
 import type { AppId, AppSlug, DeploymentId } from "@executor-js/sdk";
-import { Cause, Data, Effect, Match, Option, Schedule, Schema, Stream } from "effect";
+import { Cause, Data, Effect, Match, Option, Schema, Stream } from "effect";
 import { Atom, AtomHttpApi } from "effect/unstable/reactivity";
 import type { HttpApiEndpoint } from "effect/unstable/httpapi";
 import type { HttpClientError } from "effect/unstable/http";
@@ -25,12 +26,24 @@ class AppUiKey extends Data.Class<{
 const location = Atom.family((key: AppUiKey) =>
   AppUiClient.runtime
     .atom(
-      Stream.fromEffectSchedule(
-        Effect.flatMap(AppUiClient, (client) =>
-          client.appUi.location({ params: { organization: key.organization, app: key.app } }),
-        ),
-        Schedule.spaced("3 seconds"),
-      ).pipe(Stream.takeUntil((location) => location.status !== "pending")),
+      Stream.unwrap(
+        Effect.sync(() => {
+          let pendingReads = 0;
+          return Stream.fromEffectSchedule(
+            Effect.flatMap(AppUiClient, (client) =>
+              client.appUi.location({ params: { organization: key.organization, app: key.app } }),
+            ),
+            appUiReadinessSchedule,
+          ).pipe(
+            Stream.mapEffect((location) =>
+              location.status === "pending" && ++pendingReads >= 7
+                ? Effect.fail(new AppUiReadinessPending())
+                : Effect.succeed(location),
+            ),
+            Stream.takeUntil((location) => location.status !== "pending"),
+          );
+        }),
+      ),
     )
     .pipe(Atom.refreshOnWindowFocus),
 );
@@ -47,6 +60,7 @@ export { AppSignInId };
 
 /** Expected app authentication failures stay typed through the atom and view. */
 export type AppUiError =
+  | AppUiReadinessPending
   | HttpApiEndpoint.Errors<
       (typeof HostedAppUiApi.groups.appUi.endpoints)[keyof typeof HostedAppUiApi.groups.appUi.endpoints]
     >
@@ -55,6 +69,7 @@ export type AppUiError =
   | Cause.NoSuchElementError;
 const message = Match.type<AppUiError>().pipe(
   Match.tagsExhaustive({
+    AppUiReadinessPending: () => "The app domain is still preparing. Check again in a moment.",
     NoSuchElementError: () => "App domain status is unavailable. Try again.",
     AppUiAddressInvalid: (error) =>
       Match.value(error.reason).pipe(
