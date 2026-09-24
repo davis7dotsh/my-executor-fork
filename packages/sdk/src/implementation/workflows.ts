@@ -29,7 +29,7 @@ import { storedProfile } from "./profiles.ts";
 import { ProfileId } from "../contracts/shared.ts";
 import { storedAccount } from "./accounts.ts";
 import { storedApp } from "./apps.ts";
-import { resolve, snapshot } from "./tools.ts";
+import { resolve, snapshot, catalogRevision } from "./tools.ts";
 import { bindAppStorage } from "./app-database.ts";
 
 const StoredRun = Schema.Struct({
@@ -592,6 +592,7 @@ export const makeWorkflowRuns = (
               build: state.deployment.build,
               ...(yield* resolve(state, resolveAccount, lifecycle)),
               command: { operation: "workflows" },
+              catalogRevision: yield* catalogRevision(state, crypto),
             })
             .pipe(Effect.flatMap(Schema.decodeUnknownEffect(Schema.Array(HostedWorkflow)))),
           "execution",
