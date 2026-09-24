@@ -164,6 +164,14 @@ layer(HostedLive, { excludeTestServices: true })("Workspace source", (it) => {
           yield* body(Schema.Array(Schema.Struct({ commit: Schema.String })), history),
         ).toHaveLength(4);
         yield* trace("history", true);
+        const repeatedHistory = yield* api.request(actors.owner, "GET", `${path}/history`);
+        expect(repeatedHistory.status).toBe(200);
+        expect(repeatedHistory.body).toEqual(history.body);
+        const repeatedHistoryOperations = yield* trace("history-cached", true);
+        if (target.metadata.target === "cloud") {
+          expect(repeatedHistoryOperations).toContain("source.git.refs");
+          expect(repeatedHistoryOperations).not.toContain("source.git.history");
+        }
 
         const keyResponse = yield* api.request(actors.owner, "POST", "/api/auth/api-key/create", {
           name: "Git source verification",
