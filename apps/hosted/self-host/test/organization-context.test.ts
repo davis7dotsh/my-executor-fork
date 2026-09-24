@@ -29,7 +29,6 @@ import {
   sessionPrincipal,
   lookupMembership,
   deleteOrganizationRecords,
-  lookupOrganizationSlug,
   resolveOrganizationReference,
   authOptions,
   authSettings,
@@ -217,10 +216,6 @@ test(
                   catch: () => new AuthenticationUnavailable(),
                 }).pipe(Effect.flatMap(sessionPrincipal)),
               organization: (reference) => resolveOrganizationReference(context.adapter, reference),
-              organizationSlug: (headers, organizationId) =>
-                lookupOrganizationSlug(() =>
-                  auth.api.getOrganization({ headers, query: { organizationId } }),
-                ),
               membership: (principal, organizationId) =>
                 lookupMembership(context.adapter, principal, organizationId),
               removeOrganization: (organizationId) =>

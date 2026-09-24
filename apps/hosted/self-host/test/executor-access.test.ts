@@ -78,8 +78,8 @@ test("health and unavailable policy do not acquire the SDK; failures keep their 
         });
         const auth = Layer.succeed(Authentication, {
           origin,
-          organization: (reference) => Effect.succeed(ReferenceOrganizationId.make(reference)),
-          organizationSlug: () => Effect.succeed("synthetic"),
+          organization: (reference) =>
+            Effect.succeed({ id: ReferenceOrganizationId.make(reference), slug: "synthetic" }),
           current: () => Ref.get(signedIn).pipe(Effect.map((value) => (value ? principal : null))),
           membership: () =>
             Ref.get(role).pipe(Effect.map((role) => ({ role, headers: new Headers() }))),

@@ -141,24 +141,22 @@ export const hostedAppSessions = (
   return HostedAppSessions.of({
     organization: (find) =>
       Effect.gen(function* () {
-        const target =
-          "reference" in find
-            ? {
-                id: yield* resolveOrganizationReference(context.adapter, find.reference).pipe(
-                  Effect.catchTags({
-                    OrganizationForbidden: () => Effect.fail(new UiForbidden()),
-                    AuthenticationUnavailable: () => Effect.fail(unavailable()),
-                  }),
-                ),
-              }
-            : find;
+        if ("reference" in find) {
+          return yield* resolveOrganizationReference(context.adapter, find.reference).pipe(
+            Effect.catchTags({
+              OrganizationForbidden: () => Effect.fail(new UiForbidden()),
+              AuthenticationUnavailable: () => Effect.fail(unavailable()),
+            }),
+            Effect.flatMap((row) =>
+              Schema.decodeUnknownEffect(Organization)(row).pipe(Effect.mapError(unavailable)),
+            ),
+          );
+        }
         const row = yield* query(() =>
           context.adapter.findOne({
             model: "organization",
             where: [
-              "id" in target
-                ? { field: "id", value: target.id }
-                : { field: "slug", value: target.slug },
+              "id" in find ? { field: "id", value: find.id } : { field: "slug", value: find.slug },
             ],
             select: ["id", "slug"],
           }),

@@ -1,7 +1,6 @@
-import { CurrentOrganization } from "../contracts/organization.ts";
+import { CurrentOrganizationNamespace } from "../contracts/organization.ts";
 /** Shared product policy; local does not acquire organizations to reuse webhook execution. */
-import { Authentication, ApiAuthentication } from "../contracts/auth.ts";
-import { HttpServerRequest } from "effect/unstable/http";
+import { Authentication } from "../contracts/auth.ts";
 import { HttpServerResponse } from "effect/unstable/http";
 import { Effect } from "effect";
 import { HttpApiBuilder } from "effect/unstable/httpapi";
@@ -27,7 +26,6 @@ export const hostedWebhookCallback = Effect.flatMap(
 export const hostedWebhookHandlers = HttpApiBuilder.group(HostedApi, "webhooks", (handlers) =>
   Effect.gen(function* () {
     const auth = yield* Authentication;
-    const api = yield* ApiAuthentication;
     return handlers
       .handle("get", ({ params }) =>
         Effect.gen(function* () {
@@ -66,12 +64,7 @@ export const hostedWebhookHandlers = HttpApiBuilder.group(HostedApi, "webhooks",
           yield* executor.apps.get({ owner, app: params.app });
           yield* checkAccounts(executor, owner, (yield* executor.webhooks.get(params)).accounts);
           yield* executor.webhookSetup.read(params);
-          const request = yield* HttpServerRequest.HttpServerRequest;
-          const headers = new Headers(request.headers);
-          const slug = headers.has("authorization")
-            ? (yield* api.authenticate(headers, (yield* CurrentOrganization).organization))
-                .organizationSlug
-            : yield* auth.organizationSlug(headers, (yield* CurrentOrganization).organization);
+          const slug = yield* Effect.flatten(CurrentOrganizationNamespace);
           return {
             url: `${auth.origin}/org/${encodeURIComponent(slug)}/webhooks/${encodeURIComponent(params.app)}/${encodeURIComponent(params.subscription)}`,
           };

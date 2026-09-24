@@ -32,6 +32,12 @@ export type OrganizationSlug = typeof OrganizationSlug.Type;
 /** Explicit API target. Resolution rejects collisions between the ID and slug namespaces. */
 export const OrganizationReference = Schema.Union([OrganizationId, OrganizationSlug]);
 export type OrganizationReference = typeof OrganizationReference.Type;
+/** Request-local organization metadata returned by the same explicit-reference lookup. */
+export const ResolvedOrganization = Schema.Struct({
+  id: OrganizationId,
+  slug: Schema.NonEmptyString,
+});
+export type ResolvedOrganization = typeof ResolvedOrganization.Type;
 /** An icon is an HTTPS image, a private uploaded-image path, or null. */
 export const OrganizationLogo = Schema.NullOr(
   Schema.String.check(

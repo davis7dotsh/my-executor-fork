@@ -3,7 +3,7 @@ import { Effect, Schema } from "effect";
 import { AuthenticationUnavailable } from "../contracts/auth.ts";
 import {
   OrganizationForbidden,
-  OrganizationId,
+  ResolvedOrganization,
   type OrganizationReference,
 } from "../contracts/organization.ts";
 
@@ -20,16 +20,16 @@ export const resolveOrganizationReference = (
           { field: "id", value: reference, connector: "OR" },
           { field: "slug", value: reference, connector: "OR" },
         ],
-        select: ["id"],
+        select: ["id", "slug"],
         limit: 2,
       }),
     catch: () => new AuthenticationUnavailable(),
   }).pipe(
-    Effect.flatMap(Schema.decodeUnknownEffect(Schema.Array(Schema.Struct({ id: OrganizationId })))),
+    Effect.flatMap(Schema.decodeUnknownEffect(Schema.Array(ResolvedOrganization))),
     Effect.catchTag("SchemaError", () => Effect.fail(new AuthenticationUnavailable())),
     Effect.flatMap((matches) =>
       matches.length === 1 && matches[0] !== undefined
-        ? Effect.succeed(matches[0].id)
+        ? Effect.succeed(matches[0])
         : Effect.fail(new OrganizationForbidden()),
     ),
   );
