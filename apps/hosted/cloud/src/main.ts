@@ -71,9 +71,12 @@ import { AppDataSupervisor, AppDataSupervisorLive } from "./infrastructure/app-d
 import { cloudDevelopment } from "./contracts/development.ts";
 import { requestServices } from "@executor-js/hosted-server";
 import { requestTiming } from "@executor-js/telemetry/http";
+import { makeRequestObservation } from "./implementation/request-observation.ts";
 
 import { Api } from "./infrastructure/api-worker.ts";
 export { Api } from "./infrastructure/api-worker.ts";
+
+const observeRequest = makeRequestObservation();
 
 export default Api.make(
   Effect.gen(function* () {
@@ -352,6 +355,7 @@ export default Api.make(
         reportErrors,
         requestTiming,
         lifetime.http,
+        observeRequest,
       ),
     };
   }).pipe(

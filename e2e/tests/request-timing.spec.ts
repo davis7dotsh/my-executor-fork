@@ -1,13 +1,13 @@
 /** Real browser requests retain the timing headers used to join platform and application traces. */
 import { expect, layer } from "@effect/vitest";
-import { Effect, Schema } from "effect";
+import { Effect, Schedule, Schema } from "effect";
 import { randomUUID } from "node:crypto";
 import { scenarios } from "../test-plan.ts";
 import { Actors } from "../support/actors.ts";
 import { Api, body } from "../support/api.ts";
 import { Browser } from "../support/browser.ts";
 import { HostedLive, withHostedCase } from "../support/case.ts";
-import { Evidence } from "../support/evidence.ts";
+import { Evidence, Telemetry } from "../support/evidence.ts";
 
 layer(HostedLive, { excludeTestServices: true })("Request observability", (it) => {
   it.effect(scenarios.requestTiming.title, (context) =>
@@ -17,7 +17,8 @@ layer(HostedLive, { excludeTestServices: true })("Request observability", (it) =
         const api = yield* Api,
           actors = yield* Actors,
           browser = yield* Browser,
-          evidence = yield* Evidence;
+          evidence = yield* Evidence,
+          telemetry = yield* Telemetry;
         const prefix = `/api/organizations/${actors.organization.id}`;
         const name = `Timing ${randomUUID().slice(0, 8)}`;
         const app = yield* body(
@@ -75,6 +76,24 @@ layer(HostedLive, { excludeTestServices: true })("Request observability", (it) =
           expect(sample.waiting).toBeGreaterThan(0);
           const trace = sample.timings.find((timing) => timing.name === "executor-trace");
           expect(trace?.description).toMatch(/^[a-f0-9]{32}$/);
+          const delivered = yield* telemetry.query(trace!.description).pipe(
+            Effect.flatMap((result) =>
+              result.data.some(({ span }) => span.tags["executor.isolate.id"] !== undefined)
+                ? Effect.succeed(result)
+                : Effect.fail(new Error("Request lifecycle span has not been delivered")),
+            ),
+            Effect.retry({ schedule: Schedule.spaced("200 millis"), times: 50 }),
+          );
+          const observed = delivered.data.find(
+            ({ span }) => span.tags["executor.isolate.id"] !== undefined,
+          )!;
+          expect(String(observed.span.tags["executor.isolate.id"])).toMatch(
+            /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/,
+          );
+          expect(Number(observed.span.tags["executor.isolate.request_seq"])).toBeGreaterThan(0);
+          expect(Number(observed.span.tags["executor.isolate.age_ms"])).toBeGreaterThanOrEqual(0);
+          expect(Number(observed.span.tags["executor.handler.started_at_ms"])).toBeGreaterThan(0);
+          yield* evidence.json(`request-lifecycle-${trace!.description}.json`, delivered);
           const ray = sample.timings.find((timing) => timing.name === "cf-ray");
           expect(ray?.description).toBe(sample.ray?.replace(/-[A-Z]{3}$/i, ""));
           expect(
