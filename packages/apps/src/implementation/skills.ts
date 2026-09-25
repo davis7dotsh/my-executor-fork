@@ -151,6 +151,7 @@ export const reader = (transport: SkillTransport) =>
         return result;
       }).pipe(
         Effect.scoped,
+        requests.withPermits(1),
         Effect.provide(FetchHttpClient.layer),
         Effect.provideService(FetchHttpClient.RequestInit, { redirect: "manual" }),
         Effect.provideService(FetchHttpClient.Fetch, transport.fetch ?? globalThis.fetch),
