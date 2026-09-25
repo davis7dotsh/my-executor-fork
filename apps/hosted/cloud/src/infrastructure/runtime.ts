@@ -43,6 +43,7 @@ import type { CloudBundle } from "../contracts/builds.ts";
 import { CompiledCloudApp } from "../contracts/builds.ts";
 import { AppCompiler } from "./compiler.ts";
 import { AuthoringBackground } from "../contracts/authoring-background.ts";
+import { observeCompilerPreparation } from "../implementation/compiler-preparation-observation.ts";
 import { AppOutbound } from "./app-outbound.ts";
 import {
   loadCloudBuild,
@@ -98,16 +99,15 @@ export const cloudRuntime = Effect.fn(function* (
     const submit = yield* AuthoringBackground;
     const headers = Object.fromEntries(Object.entries(yield* traceHeaders));
     yield* submit(
-      compiler.prepare(headers).pipe(
-        Effect.withSpan("runtime.cloud.compiler.prepare"),
-        Effect.catchCause(() => Effect.logWarning("Compiler preparation failed")),
-        Effect.provide(RuntimeContext.phantom),
-      ),
+      compiler
+        .prepare(headers)
+        .pipe(
+          observeCompilerPreparation("prepare"),
+          Effect.withSpan("runtime.cloud.compiler.prepare"),
+          Effect.provide(RuntimeContext.phantom),
+        ),
     );
-  }).pipe(
-    Effect.provide(RuntimeContext.phantom),
-    Effect.catchCause(() => Effect.logWarning("Compiler preparation scheduling failed")),
-  );
+  }).pipe(Effect.provide(RuntimeContext.phantom), observeCompilerPreparation("schedule"));
   const runtime = Effect.gen(function* () {
     const outbound = Cloudflare.fromCloudflareFetcher(
       yield* Schema.decodeUnknownEffect(NativeFetcher)(environment.AppOutbound).pipe(Effect.orDie),
