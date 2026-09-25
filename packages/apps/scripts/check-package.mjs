@@ -11,9 +11,11 @@ const artifacts = fileURLToPath(new URL("../../../.local/apps-package/", import.
 await mkdir(artifacts, { recursive: true });
 const run = (command, args, cwd) =>
   execFileSync(command, args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-const [packed] = JSON.parse(
+const packedResult = JSON.parse(
   run("npm", ["pack", "./dist", "--json", "--pack-destination", artifacts], root),
 );
+// npm 12 keys pack results by package name; older npm versions return an array.
+const [packed] = Array.isArray(packedResult) ? packedResult : Object.values(packedResult);
 const archive = join(artifacts, packed.filename);
 const manifest = JSON.parse(await readFile(join(root, "dist/package.json"), "utf8"));
 assert.equal(manifest.publishConfig.tag, "beta");
