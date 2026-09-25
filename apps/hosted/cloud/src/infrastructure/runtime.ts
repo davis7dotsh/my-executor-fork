@@ -42,6 +42,7 @@ import { workerModules } from "@executor-js/app-data/worker-bundle";
 import type { CloudBundle } from "../contracts/builds.ts";
 import { CompiledCloudApp } from "../contracts/builds.ts";
 import { AppCompiler } from "./compiler.ts";
+import { AuthoringBackground } from "../contracts/authoring-background.ts";
 import { AppOutbound } from "./app-outbound.ts";
 import {
   loadCloudBuild,
@@ -93,7 +94,21 @@ export const cloudRuntime = Effect.fn(function* (
     bindings: [{ type: "service", name: "AppOutbound", service: network.workerName }],
   });
   const environment = yield* Cloudflare.WorkerEnvironment;
-  return Effect.gen(function* () {
+  const prepareAuthoring = Effect.gen(function* () {
+    const submit = yield* AuthoringBackground;
+    const headers = Object.fromEntries(Object.entries(yield* traceHeaders));
+    yield* submit(
+      compiler.prepare(headers).pipe(
+        Effect.withSpan("runtime.cloud.compiler.prepare"),
+        Effect.catchCause(() => Effect.logWarning("Compiler preparation failed")),
+        Effect.provide(RuntimeContext.phantom),
+      ),
+    );
+  }).pipe(
+    Effect.provide(RuntimeContext.phantom),
+    Effect.catchCause(() => Effect.logWarning("Compiler preparation scheduling failed")),
+  );
+  const runtime = Effect.gen(function* () {
     const outbound = Cloudflare.fromCloudflareFetcher(
       yield* Schema.decodeUnknownEffect(NativeFetcher)(environment.AppOutbound).pipe(Effect.orDie),
     );
@@ -520,4 +535,5 @@ export const cloudRuntime = Effect.fn(function* (
       },
     });
   });
+  return { runtime, prepareAuthoring };
 });

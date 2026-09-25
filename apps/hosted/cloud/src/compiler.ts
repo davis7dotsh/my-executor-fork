@@ -3,6 +3,7 @@ import { RuntimeBuildFailed, SourceFiles } from "@executor-js/sdk/core";
 import { withRemoteSpan } from "@executor-js/telemetry";
 import { Effect, Schema } from "effect";
 import { compileCloudApp } from "./implementation/app-build.ts";
+import { makeCompilerPreparation } from "./implementation/compiler-preparation.ts";
 import {
   cloudObservability,
   cloudTelemetry,
@@ -21,14 +22,19 @@ export default AppCompiler.make(
       env: yield* telemetryBindings,
     };
   }),
-  Effect.succeed(
-    AppCompiler.of({
+  Effect.gen(function* () {
+    const prepare = makeCompilerPreparation();
+    return AppCompiler.of({
+      prepare: (headers) =>
+        prepare.pipe(
+          withRemoteSpan(new Request("https://compiler.internal", { headers }), "compiler.prepare"),
+        ),
       compile: (files, headers) =>
         Schema.decodeUnknownEffect(SourceFiles)(files).pipe(
           Effect.mapError(() => new RuntimeBuildFailed({ stage: "source" })),
           Effect.flatMap(compileCloudApp),
           withRemoteSpan(new Request("https://compiler.internal", { headers }), "compiler.compile"),
         ),
-    }),
-  ).pipe(Effect.provide(cloudTelemetry)),
+    });
+  }).pipe(Effect.provide(cloudTelemetry)),
 );

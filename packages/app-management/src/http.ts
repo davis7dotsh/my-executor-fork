@@ -46,6 +46,8 @@ export class AppManagementHost extends Context.Service<
   Effect.Effect<
     {
       readonly executor: Executor;
+      /** Optional best-effort preparation. The host owns its background lifetime. */
+      readonly prepareAuthoring?: Effect.Effect<void>;
       /** Optional product-owned policy; local pairing uses the identity's existing authority. */
       readonly access?:
         | ((
@@ -137,9 +139,11 @@ const authoring = (id: AppId) =>
     };
   });
 /** Publication preview always checks the complete stored files, never a display listing. */
-const workspaceSource = (id: AppId) =>
+const workspaceSource = (id: AppId, prepare = false) =>
   Effect.gen(function* () {
     const { app, host, metadata } = yield* authoring(id);
+    if (prepare && metadata.canEdit && host.prepareAuthoring !== undefined)
+      yield* host.prepareAuthoring;
     const source = yield* host.executor.apps.workspace({ owner: app.owner, app: id });
     const { canPublish, ...fields } = metadata;
     return {
@@ -191,7 +195,7 @@ export const appManagementHandlers = <I extends HttpApiMiddleware.AnyId, S, Id e
       .handle("authoring", ({ params }) =>
         authoring(params.app).pipe(Effect.map(({ metadata }) => metadata)),
       )
-      .handle("source", ({ params }) => workspaceSource(params.app))
+      .handle("source", ({ params }) => workspaceSource(params.app, true))
       .handle("sourceDisplay", ({ params }) =>
         workspaceSource(params.app).pipe(Effect.flatMap(sourceDisplay)),
       )

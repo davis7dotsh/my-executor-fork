@@ -1765,6 +1765,16 @@ export const scenarios = {
       ),
     },
   },
+  compilerPreparation: {
+    fixtures: "actors",
+    file: "compiler-preparation.spec.ts",
+    title: "Cloud source editing prepares the compiler without running authored code",
+    targets: {
+      cloud: { status: "scheduled", runtime: "attached" },
+      "self-host": na("Cloud private compiler preparation; source access has hosted coverage."),
+      local: na("Cloud private compiler preparation."),
+    },
+  },
   appSkills: {
     fixtures: "actors",
     file: "app-skills.spec.ts",
