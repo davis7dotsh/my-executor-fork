@@ -226,19 +226,31 @@ export const makeApps = (
             }),
         ),
       );
-      const built = yield* runtime.build({ files }).pipe(
-        Effect.mapError((error) =>
-          Schema.is(BuildMemoryExceeded)(error)
-            ? error
-            : new DeploymentBuildFailed({
-                owner: input.owner,
-                name: deployName,
-                reason:
-                  Schema.is(RuntimeBuildFailed)(error) && error.dependency !== undefined
-                    ? `Add ${error.dependency} to package.json dependencies.`
-                    : "App build failed",
-              }),
-        ),
+      const deploymentId = DeploymentId.make(
+        `dpl_${yield* crypto.randomUUIDv4.pipe(Effect.mapError(() => new StorageError()))}`,
+      );
+      // Immutable uploads have no database references until the final transaction.
+      // Compilation, declaration and retained-build publication can overlap these source writes.
+      const { built } = yield* Effect.all(
+        {
+          built: runtime.build({ files }).pipe(
+            Effect.mapError((error) =>
+              Schema.is(BuildMemoryExceeded)(error)
+                ? error
+                : new DeploymentBuildFailed({
+                    owner: input.owner,
+                    name: deployName,
+                    reason:
+                      Schema.is(RuntimeBuildFailed)(error) && error.dependency !== undefined
+                        ? `Add ${error.dependency} to package.json dependencies.`
+                        : "App build failed",
+                  }),
+            ),
+          ),
+          source: writeDeploymentSource(blobs, deploymentId, files),
+          initial: before === null ? writeInitialSource(blobs, code, files) : Effect.void,
+        },
+        { concurrency: 3 },
       );
       const entries = yield* Effect.forEach(
         Object.entries(built.requirements.accounts),
@@ -263,18 +275,13 @@ export const makeApps = (
       };
 
       const deployment = {
-        id: DeploymentId.make(
-          `dpl_${yield* crypto.randomUUIDv4.pipe(Effect.mapError(() => new StorageError()))}`,
-        ),
+        id: deploymentId,
         code,
         owner: input.owner,
         sourceCommit: input.commit ?? null,
         build: built.build,
         createdAt: new Date(yield* Clock.currentTimeMillis),
       };
-      yield* writeDeploymentSource(blobs, deployment.id, files);
-      // A new app owns an initial workspace independently of this immutable deployment.
-      if (before === null) yield* writeInitialSource(blobs, code, files);
       return yield* transaction(db, (tx) =>
         Effect.gen(function* () {
           const row = yield* query(() =>
