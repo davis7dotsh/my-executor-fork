@@ -14,7 +14,7 @@ export const PublishedAppFramework = Schema.Struct({
   browser: Schema.Record(Schema.String, Schema.String),
 });
 
-/** The existing bundle key remains the publication point; builds without a UI omit its metadata. */
+/** Retained metadata lists immutable objects; callers publish only completed builds. */
 export const RetainedWorkerBuild = Schema.Struct({
   ...WorkerBundle.fields,
   database: Schema.Boolean,

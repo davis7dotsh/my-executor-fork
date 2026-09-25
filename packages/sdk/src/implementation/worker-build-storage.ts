@@ -1,4 +1,4 @@
-/** Publish immutable browser objects before the existing retained Worker bundle key. */
+/** Publish immutable browser objects and Worker metadata before returning a build reference. */
 import { BlobKey, BlobStore } from "../contracts/blobs.ts";
 import { RuntimeBuildFailed, RuntimeBuildUnavailable } from "../contracts/runtime.ts";
 import type { BuildId } from "../contracts/shared.ts";
@@ -16,15 +16,6 @@ export const retainWorkerBuild = (
 ) =>
   Effect.gen(function* () {
     const blobs = yield* BlobStore;
-    if (ui !== undefined)
-      yield* Effect.forEach(
-        ui,
-        (file) =>
-          Effect.gen(function* () {
-            yield* blobs.put(yield* key(`${build}/ui/${file.path}`), file.body);
-          }),
-        { concurrency: 8, discard: true },
-      );
     const metadata = ui?.map(({ path, contentType }) => ({ path, contentType }));
     const encoded = yield* Schema.encodeEffect(RetainedWorkerBuild)({
       ...bundle,
@@ -35,7 +26,18 @@ export const retainWorkerBuild = (
       "executor.build.retained_bytes": body.byteLength,
       "executor.build.module_count": Object.keys(bundle.modules).length,
     });
-    yield* blobs.put(yield* key(`${build}.json`), body);
+    // A partial upload is unreferenced: callers publish the build only after every put succeeds.
+    yield* Effect.forEach(
+      [
+        ...(ui ?? []).map((file) => ({ path: `${build}/ui/${file.path}`, body: file.body })),
+        { path: `${build}.json`, body },
+      ],
+      (file) =>
+        Effect.gen(function* () {
+          yield* blobs.put(yield* key(file.path), file.body);
+        }),
+      { concurrency: 8, discard: true },
+    );
     return metadata;
   }).pipe(
     Effect.mapError(() => new RuntimeBuildFailed({ stage: "retain" })),
