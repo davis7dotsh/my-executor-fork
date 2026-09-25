@@ -31,7 +31,7 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "pack": "bun run build && npm pack ./dist --pack-destination ./dist",
-    "test:package": "node scripts/check-package.mjs"
+    "test:package": "node scripts/check-package.mjs && vitest run test/skill-concurrency.test.ts"
   },
   "dependencies": {
     "@cfworker/json-schema": "4.1.1",
