@@ -77,7 +77,7 @@ export const cloudExecutor = Effect.fn(function* (
     Config.map(Option.getOrUndefined),
   );
   const connection = yield* cloudDatabaseConnection;
-  const makeRuntime = yield* cloudRuntime(databases, origin);
+  const { runtime: makeRuntime, prepareAuthoring } = yield* cloudRuntime(databases, origin);
   const workflows = yield* cloudWorkflows;
   const blobs = yield* cloudBlobs;
   const assets = yield* makeExecutionMemo(
@@ -125,6 +125,7 @@ export const cloudExecutor = Effect.fn(function* (
         scheduleAuthority,
         management: {
           executor,
+          prepareAuthoring,
           sources,
           repositories,
           registry,

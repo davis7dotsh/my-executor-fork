@@ -22,6 +22,9 @@ export const CompiledCloudApp = Schema.Struct({
 
 /** Compiler binding calls include Alchemy transport failures as well as declared build failures. */
 export type CloudCompiler = {
+  readonly prepare: (
+    headers: Readonly<Record<string, string>>,
+  ) => Effect.Effect<void, RuntimeBuildFailed | RpcCallError>;
   readonly compile: (
     files: SourceFiles,
     headers: Readonly<Record<string, string>>,

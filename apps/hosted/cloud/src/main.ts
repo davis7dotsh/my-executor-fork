@@ -37,6 +37,7 @@ import * as Cloudflare from "alchemy/Cloudflare";
 import { cloudSite } from "./infrastructure/site.ts";
 import * as Output from "alchemy/Output";
 import { AlchemyContext } from "alchemy/AlchemyContext";
+import { RuntimeContext } from "alchemy";
 import { Config, Effect, Layer, Option, Path } from "effect";
 import { HttpRouter, HttpServer, HttpServerResponse } from "effect/unstable/http";
 import { cloudAuth } from "./infrastructure/auth.ts";
@@ -71,6 +72,7 @@ import { AppDataSupervisor, AppDataSupervisorLive } from "./infrastructure/app-d
 import { cloudDevelopment } from "./contracts/development.ts";
 import { requestServices } from "@executor-js/hosted-server";
 import { requestTiming } from "@executor-js/telemetry/http";
+import { AuthoringBackground } from "./contracts/authoring-background.ts";
 
 import { Api } from "./infrastructure/api-worker.ts";
 export { Api } from "./infrastructure/api-worker.ts";
@@ -325,18 +327,22 @@ export default Api.make(
     return {
       fetch: Effect.gen(function* () {
         const request = yield* HttpServerRequest.HttpServerRequest;
+        const execution = yield* Cloudflare.WorkerExecutionContext;
         // Streamed responses close their HTTP scope before delivering EOF.
         // Dispatch has its own scope and must not hold that EOF until background work finishes.
         // Cron recovers dispatch if the request ends before this finalizer runs.
         if (!["GET", "HEAD", "OPTIONS"].includes(request.method)) {
-          const execution = yield* Cloudflare.WorkerExecutionContext;
           yield* Effect.addFinalizer(() =>
             execution.waitUntil(
               dispatch.pipe(lifetime.background, Effect.timeoutOption("10 seconds"), Effect.asVoid),
             ),
           );
         }
-        return yield* handle;
+        return yield* handle.pipe(
+          Effect.provideService(AuthoringBackground, (work) =>
+            execution.waitUntil(work).pipe(Effect.provide(RuntimeContext.phantom)),
+          ),
+        );
       }).pipe(
         Effect.tapCause(reportCloudFailure),
         Effect.catchTag("AuthenticationUnavailable", () =>
