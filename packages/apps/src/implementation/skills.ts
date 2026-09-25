@@ -1,5 +1,5 @@
 /** Remote skill readers return complete portable bundles, never installed host files. */
-import { Effect, Ref, Schema, Stream } from "effect";
+import { Effect, Ref, Schema, Semaphore, Stream } from "effect";
 import { FetchHttpClient, HttpBody, HttpClient } from "effect/unstable/http";
 import { skillFromFiles } from "./skill-files.ts";
 import { wrap } from "./schema.ts";
@@ -94,6 +94,7 @@ const pathUrl = (base: string, path: string) =>
 export const reader = (transport: SkillTransport) =>
   Effect.gen(function* () {
     const budget = yield* Ref.make(0);
+    const requests = yield* Semaphore.make(skillLoadLimits.concurrency);
     /** Fetch one response body within the per-file and per-load byte limits. */
     const fetchBytes = (
       url: string,
@@ -330,7 +331,7 @@ export const githubSkillsEffect = (options: GitHubSkillsOptions) =>
             directory === "" || name === undefined ? {} : { name },
           ).pipe(Effect.mapError(() => failed("document")));
         }),
-      { concurrency: 1 },
+      { concurrency: skillLoadLimits.concurrency },
     );
     return yield* parse(AppSkills, skills);
   }).pipe(withService("GitHub"));
@@ -379,7 +380,7 @@ export const wellKnownSkillsEffect = (options: WellKnownSkillsOptions) =>
             Effect.mapError(() => failed("document")),
           );
         }),
-      { concurrency: 1 },
+      { concurrency: skillLoadLimits.concurrency },
     );
     if ((yield* remote.read(url.href)) !== first) return yield* failed("changed");
     return yield* parse(AppSkills, skills);
